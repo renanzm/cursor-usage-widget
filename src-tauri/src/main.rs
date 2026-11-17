@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod alerts;
 mod config;
 mod usage;
 
@@ -54,6 +55,12 @@ fn set_autostart(on: bool) {
     }
 }
 
+/// Registra o AppUserModelID para o Windows aceitar exibir toasts deste executável.
+fn register_toast_identity(identifier: &str) {
+    let key = format!(r"HKCU\Software\Classes\AppUserModelId\{identifier}");
+    reg(&["add", &key, "/v", "DisplayName", "/t", "REG_SZ", "/d", "Cursor Usage Widget", "/f"]);
+}
+
 fn http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
@@ -87,10 +94,12 @@ async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
 async fn poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
     let client = http_client();
     let interval = config::setting_f64("POLL_SECONDS", 30.0).max(10.0);
+    let mut alerts = alerts::Alerts::default();
     loop {
         let snap = run_once(&client, &state).await;
         *state.snapshot.lock().unwrap() = snap.clone();
         let _ = app.emit("usage", &snap);
+        alerts.check(&app, &snap);
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs_f64(interval)) => {}
             _ = state.notify.notified() => {}
@@ -163,6 +172,7 @@ fn main() {
     });
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(state.clone())
         .invoke_handler(tauri::generate_handler![
             get_snapshot,
@@ -171,6 +181,7 @@ fn main() {
             set_expanded
         ])
         .setup(move |app| {
+            register_toast_identity(&app.config().identifier);
             let win = app.get_webview_window("main").expect("janela main");
             place(&win, false);
 
@@ -213,6 +224,15 @@ fn main() {
                     _ => {}
                 })
                 .build(app)?;
+
+            // `--test-notify` dispara uma notificação de teste ao abrir.
+            if std::env::args().any(|a| a == "--test-notify") {
+                alerts::notify(
+                    app.handle(),
+                    "Cursor Usage: teste",
+                    "As notificações do widget estão funcionando.",
+                );
+            }
 
             tauri::async_runtime::spawn(poll_loop(app.handle().clone(), state.clone()));
             Ok(())
