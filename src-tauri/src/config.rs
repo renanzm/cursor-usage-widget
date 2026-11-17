@@ -82,7 +82,10 @@ pub fn load_cookie() -> Option<String> {
             }
         }
     }
-    setting("CURSOR_COOKIE").and_then(|v| normalize(&v))
+    // Veio do env/.env: guarda no Credential Manager para o executável funcionar de qualquer pasta.
+    let cookie = setting("CURSOR_COOKIE").and_then(|v| normalize(&v))?;
+    let _ = save_cookie(&cookie);
+    Some(cookie)
 }
 
 pub fn save_cookie(cookie: &str) -> Result<(), String> {

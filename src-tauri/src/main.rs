@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem},
     tray::TrayIconBuilder,
     Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewWindow,
 };
@@ -23,6 +23,35 @@ struct AppState {
     snapshot: Mutex<Snapshot>,
     team: Mutex<Option<i64>>,
     notify: Notify,
+}
+
+// ---------- iniciar com o Windows (chave HKCU\...\Run) ----------
+const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
+const RUN_NAME: &str = "CursorUsageWidget";
+
+fn reg(args: &[&str]) -> bool {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("reg")
+        .args(args)
+        .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn autostart_enabled() -> bool {
+    reg(&["query", RUN_KEY, "/v", RUN_NAME])
+}
+
+fn set_autostart(on: bool) {
+    if on {
+        if let Ok(exe) = std::env::current_exe() {
+            let value = format!("\"{}\"", exe.display());
+            reg(&["add", RUN_KEY, "/v", RUN_NAME, "/t", "REG_SZ", "/d", &value, "/f"]);
+        }
+    } else {
+        reg(&["delete", RUN_KEY, "/v", RUN_NAME, "/f"]);
+    }
 }
 
 fn http_client() -> reqwest::Client {
@@ -147,9 +176,18 @@ fn main() {
 
             let refresh = MenuItem::with_id(app, "refresh", "Atualizar agora", true, None::<&str>)?;
             let toggle = MenuItem::with_id(app, "toggle", "Mostrar/ocultar", true, None::<&str>)?;
+            let auto = CheckMenuItem::with_id(
+                app,
+                "autostart",
+                "Iniciar com o Windows",
+                true,
+                autostart_enabled(),
+                None::<&str>,
+            )?;
             let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&refresh, &toggle, &quit])?;
+            let menu = Menu::with_items(app, &[&refresh, &toggle, &auto, &quit])?;
             let st = state.clone();
+            let auto_item = auto.clone();
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().expect("ícone").clone())
                 .tooltip("Cursor Usage")
@@ -164,6 +202,12 @@ fn main() {
                                 let _ = w.show();
                             }
                         }
+                    }
+                    "autostart" => {
+                        // O item já alterna sozinho ao clicar; sincroniza o registro com ele.
+                        let on = auto_item.is_checked().unwrap_or(false);
+                        set_autostart(on);
+                        let _ = auto_item.set_checked(autostart_enabled());
                     }
                     "quit" => app.exit(0),
                     _ => {}
