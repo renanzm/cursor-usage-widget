@@ -106,8 +106,38 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .projection.warn { color: var(--red); }
 
 .msg { margin-top: 8px; font-size: 11px; color: var(--red); }
-.cookie { display: flex; gap: 6px; margin-top: 8px; }
-.cookie input { flex: 1; min-width: 0; user-select: text; background: var(--g2); border: 1px solid var(--g3); border-radius: 8px; padding: 6px 9px; color: var(--text); font-size: 11px; outline: none; }
-.cookie input:focus { border-color: var(--orange); }
-.cookie button { background: var(--orange); color: #000; border: none; border-radius: 8px; padding: 0 12px; font-weight: 700; font-size: 11px; cursor: pointer; }
+
+/* campo do cookie */
+.cookie { display: flex; gap: 8px; margin-top: 10px; }
+.cookie input {
+  flex: 1; min-width: 0; height: 34px; user-select: text;
+  background: var(--g2); border: 1px solid var(--g4); border-radius: 10px;
+  padding: 0 11px; color: var(--text); font: inherit; font-size: 12px; outline: none;
+}
+.cookie input::placeholder { color: var(--g5); }
+.cookie input:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255, 159, 10, .18); }
+.cookie button {
+  height: 34px; padding: 0 14px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(180deg, var(--orange), var(--orange-deep)); color: #000;
+  font: inherit; font-weight: 700; font-size: 12px;
+}
+.cookie button:hover { filter: brightness(1.1); }
+.cookie button:active { transform: scale(.97); }
+
+/* instrução (só aparece sem cookie) */
+.hint { display: none; text-align: center; }
+.hint strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.3px; }
+.hint p { margin-top: 8px; font-size: 11.5px; line-height: 1.5; color: var(--g5); }
+.hint code { color: var(--orange); font-family: inherit; font-weight: 600; }
+.hint span { font-size: 10.5px; color: var(--g4); }
+
+/* estado sem cookie: esconde os dados e centraliza o formulário */
+[data-state="auth"] .gauge-wrap,
+[data-state="auth"] .rate-block,
+[data-state="auth"] .divider,
+[data-state="auth"] .cycle { display: none; }
+[data-state="auth"] .hint { display: block; margin-top: auto; }
+[data-state="auth"] .msg { text-align: center; }
+[data-state="auth"] .cookie { margin-bottom: auto; }
+
 [hidden] { display: none !important; }

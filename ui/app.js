@@ -81,7 +81,9 @@ function render(s) {
   }
 
   // mensagens / cookie
-  $("msg").hidden = !(s.message && s.status !== "ok");
+  // No estado "auth" a instrução já explica o que fazer; só mostra a mensagem se a sessão expirou.
+  const showMsg = s.message && (s.status === "error" || (s.status === "auth" && s.message.includes("expirada")));
+  $("msg").hidden = !showMsg;
   $("msg").textContent = s.message ?? "";
   $("cookie-form").hidden = s.status !== "auth";
 
