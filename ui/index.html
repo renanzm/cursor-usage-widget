@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cursor Usage</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="w" class="widget" data-level="low" data-state="loading">
+    <!-- Aba recolhida -->
+    <section class="tab">
+      <span class="dot"></span>
+      <span id="tab-amount" class="tab-amount">--</span>
+      <span class="tab-label">ciclo</span>
+      <span class="tab-bar"><i id="tab-fill"></i></span>
+    </section>
+
+    <!-- Painel expandido -->
+    <section class="panel">
+      <header>
+        <span class="title">Cursor · gasto</span>
+        <span id="clock" class="clock"></span>
+      </header>
+
+      <div class="gauge-wrap">
+        <svg viewBox="0 0 200 118" class="gauge" aria-hidden="true">
+          <g id="arcs" fill="none" stroke-width="14" stroke-linecap="butt"></g>
+          <g id="needle" class="needle">
+            <line x1="100" y1="100" x2="100" y2="36" />
+            <circle cx="100" cy="100" r="7" />
+          </g>
+        </svg>
+        <div class="rate">
+          <strong id="rate">--</strong><small>/h</small>
+        </div>
+        <div class="rate-caption"><span id="level-label">--</span> · últimas 3h: <b id="window">--</b></div>
+      </div>
+
+      <div class="cycle">
+        <div class="cycle-row">
+          <span id="cycle-amount">--</span>
+          <span id="cycle-pct">--</span>
+        </div>
+        <div class="bar"><i id="cycle-fill"></i></div>
+        <div id="projection" class="projection"></div>
+      </div>
+
+      <div id="msg" class="msg" hidden></div>
+      <form id="cookie-form" class="cookie" hidden>
+        <input id="cookie-input" type="password" placeholder="Cole o WorkosCursorSessionToken" autocomplete="off" spellcheck="false" />
+        <button type="submit">Salvar</button>
+      </form>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
