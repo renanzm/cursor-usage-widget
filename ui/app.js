@@ -16,8 +16,7 @@ const polar = (f, r) => {
   const th = Math.PI * (1 - f);
   return [CX + r * Math.cos(th), CY - r * Math.sin(th)];
 };
-function drawTicks(lowMax, highMin) {
-  const max = highMin * 2;
+function drawTicks(lowMax, highMin, max) {
   $("ticks").innerHTML = [lowMax, highMin]
     .map((v) => {
       const [x0, y0] = polar(v / max, R + 8);
@@ -49,8 +48,8 @@ function render(s) {
   $("tab-fill").style.height = Math.min(pct, 100) + "%";
 
   // velocímetro
-  drawTicks(s.lowMax, s.highMin);
-  const f = Math.max(0, Math.min(1, s.ratePerHour / (s.highMin * 2)));
+  drawTicks(s.lowMax, s.highMin, s.rateMax);
+  const f = Math.max(0, Math.min(1, s.ratePerHour / s.rateMax));
   const dash = `${(f * 100).toFixed(2)} 100`;
   $("fill").style.strokeDasharray = dash;
   $("fill-glow").style.strokeDasharray = dash;

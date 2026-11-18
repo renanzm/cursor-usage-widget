@@ -27,6 +27,8 @@ pub struct Snapshot {
     pub level: String,
     pub low_max: f64,
     pub high_min: f64,
+    /// Fundo de escala do velocímetro (US$/h).
+    pub rate_max: f64,
     pub updated_at_ms: u64,
 }
 
@@ -45,6 +47,7 @@ impl Snapshot {
             level: "low".into(),
             low_max: config::setting_f64("RATE_LOW_MAX", 1.0),
             high_min: config::setting_f64("RATE_HIGH_MIN", 3.0),
+            rate_max: config::setting_f64("RATE_MAX", 20.0).max(1.0),
             updated_at_ms: now_ms(),
         }
     }
