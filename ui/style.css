@@ -21,7 +21,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.widget[data-level="high"] { --accent: var(--red); }
+/* Cor do LED e do selo conforme o nível do ritmo */
+.widget[data-level="low"]  { --accent: #30d158; --accent-bg: rgba(48, 209, 88, .16); }
+.widget[data-level="mid"]  { --accent: #ffd60a; --accent-bg: rgba(255, 214, 10, .16); }
+.widget[data-level="high"] { --accent: var(--red); --accent-bg: rgba(255, 69, 58, .16); }
 
 .widget {
   position: relative;
@@ -89,8 +92,7 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .rate small { font-size: 13px; color: var(--g5); margin-left: 3px; font-weight: 500; }
 .rate-sub { margin-top: 7px; font-size: 11px; color: var(--g5); display: flex; gap: 6px; justify-content: center; align-items: center; }
 .rate-sub b { color: var(--text); font-weight: 600; }
-.chip { padding: 2px 9px; border-radius: 999px; background: rgba(255, 159, 10, .14); color: var(--orange); font-weight: 700; font-size: 10.5px; letter-spacing: .3px; }
-[data-level="high"] .chip { background: rgba(255, 69, 58, .16); color: var(--red); }
+.chip { padding: 2px 9px; border-radius: 999px; background: var(--accent-bg); color: var(--accent); font-weight: 700; font-size: 10.5px; letter-spacing: .3px; }
 
 .divider { height: 1px; margin: 12px 0 10px; background: linear-gradient(90deg, transparent, var(--g3), transparent); }
 

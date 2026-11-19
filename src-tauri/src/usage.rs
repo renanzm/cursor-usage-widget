@@ -45,8 +45,8 @@ impl Snapshot {
             window_events: 0,
             rate_per_hour: 0.0,
             level: "low".into(),
-            low_max: config::setting_f64("RATE_LOW_MAX", 1.0),
-            high_min: config::setting_f64("RATE_HIGH_MIN", 3.0),
+            low_max: config::setting_f64("RATE_LOW_MAX", 6.0),
+            high_min: config::setting_f64("RATE_HIGH_MIN", 13.0),
             rate_max: config::setting_f64("RATE_MAX", 20.0).max(1.0),
             updated_at_ms: now_ms(),
         }
@@ -156,7 +156,8 @@ pub async fn fetch(
     snap.window_usd = cents / 100.0;
     snap.window_events = events;
     snap.rate_per_hour = snap.window_usd / WINDOW_HOURS;
-    snap.level = if snap.rate_per_hour < snap.low_max {
+    // Baixo: até low_max (inclusive); Médio: abaixo de high_min; Alto: high_min ou mais.
+    snap.level = if snap.rate_per_hour <= snap.low_max {
         "low"
     } else if snap.rate_per_hour < snap.high_min {
         "mid"
