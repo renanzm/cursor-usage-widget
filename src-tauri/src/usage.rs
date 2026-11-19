@@ -1,9 +1,13 @@
 //! Consulta dos endpoints internos do dashboard do Cursor (não documentados).
 use crate::config;
+use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
 use reqwest::{Client, Method, StatusCode};
 use serde::Serialize;
 use serde_json::{json, Value};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::HashMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const BASE: &str = "https://cursor.com";
 const WINDOW_HOURS: f64 = 3.0;
@@ -29,6 +33,12 @@ pub struct Snapshot {
     pub high_min: f64,
     /// Fundo de escala do velocímetro (US$/h).
     pub rate_max: f64,
+    /// Gasto (US$) de segunda a sexta da semana atual; `null` = dia ainda não chegou ou falhou.
+    pub week_usd: Vec<Option<f64>>,
+    /// Índice (0 = segunda … 4 = sexta) do dia de hoje; `null` no fim de semana.
+    pub week_today: Option<usize>,
+    /// Fundo de escala diário do equalizador (US$).
+    pub day_max_usd: f64,
     pub updated_at_ms: u64,
 }
 
@@ -48,6 +58,9 @@ impl Snapshot {
             low_max: config::setting_f64("RATE_LOW_MAX", 6.0),
             high_min: config::setting_f64("RATE_HIGH_MIN", 13.0),
             rate_max: config::setting_f64("RATE_MAX", 20.0).max(1.0),
+            week_usd: Vec::new(),
+            week_today: None,
+            day_max_usd: config::setting_f64("DAY_MAX_USD", 100.0).max(1.0),
             updated_at_ms: now_ms(),
         }
     }
@@ -127,10 +140,78 @@ async fn window_cost(
     Ok((cents, seen))
 }
 
+/// Custo total (centavos) no intervalo [start, end] em ms, pelo endpoint agregado do dashboard.
+async fn aggregated_cents(
+    client: &Client,
+    cookie: &str,
+    team_id: i64,
+    start: i64,
+    end: i64,
+) -> Result<f64, FetchError> {
+    let body = json!({ "teamId": team_id, "startDate": start, "endDate": end });
+    let v = call(client, cookie, Method::POST, "/api/dashboard/get-aggregated-usage-events", Some(body)).await?;
+    Ok(v["totalCostCents"].as_f64().unwrap_or(0.0))
+}
+
+fn local_midnight_ms(d: NaiveDate) -> i64 {
+    d.and_hms_opt(0, 0, 0)
+        .and_then(|t| Local.from_local_datetime(&t).earliest())
+        .map(|t| t.timestamp_millis())
+        .unwrap_or(0)
+}
+
+/// Gasto por dia de segunda a sexta da semana atual (hora local). Dias já encerrados ficam em cache.
+async fn week_usage(
+    client: &Client,
+    cookie: &str,
+    team_id: i64,
+    cache: &mut HashMap<String, f64>,
+) -> Result<(Vec<Option<f64>>, Option<usize>), FetchError> {
+    let now = Local::now();
+    let today = now.date_naive();
+    let today_idx = today.weekday().num_days_from_monday() as usize;
+    let monday = today - Duration::days(today_idx as i64);
+
+    let mut out = Vec::with_capacity(5);
+    for i in 0..5usize {
+        let day = monday + Duration::days(i as i64);
+        if day > today {
+            out.push(None);
+            continue;
+        }
+        let key = day.to_string();
+        let closed = day < today;
+        if closed {
+            if let Some(c) = cache.get(&key) {
+                out.push(Some(c / 100.0));
+                continue;
+            }
+        }
+        let start = local_midnight_ms(day);
+        let end = if closed {
+            local_midnight_ms(day + Duration::days(1))
+        } else {
+            now.timestamp_millis()
+        };
+        match aggregated_cents(client, cookie, team_id, start, end).await {
+            Ok(c) => {
+                if closed {
+                    cache.insert(key, c);
+                }
+                out.push(Some(c / 100.0));
+            }
+            Err(FetchError::Auth) => return Err(FetchError::Auth),
+            Err(FetchError::Other(_)) => out.push(None),
+        }
+    }
+    Ok((out, (today_idx <= 4).then_some(today_idx)))
+}
+
 pub async fn fetch(
     client: &Client,
     cookie: &str,
     team_cache: &mut Option<i64>,
+    day_cache: &mut HashMap<String, f64>,
 ) -> Result<Snapshot, FetchError> {
     let summary = call(client, cookie, Method::GET, "/api/usage-summary", None).await?;
 
@@ -145,8 +226,12 @@ pub async fn fetch(
     let start = end.saturating_sub((WINDOW_HOURS * 3_600_000.0) as u64);
     let (cents, events) = window_cost(client, cookie, team_id, start, end).await?;
 
+    let (week, week_today) = week_usage(client, cookie, team_id, day_cache).await?;
+
     let overall = &summary["individualUsage"]["overall"];
     let mut snap = Snapshot::empty("ok", None);
+    snap.week_usd = week;
+    snap.week_today = week_today;
     snap.cycle_used_usd = overall["used"].as_f64().unwrap_or(0.0) / 100.0;
     if let Some(limit) = overall["limit"].as_f64() {
         snap.cycle_limit_usd = limit / 100.0;

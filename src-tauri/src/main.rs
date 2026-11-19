@@ -18,11 +18,13 @@ use usage::{FetchError, Snapshot};
 
 // Tamanhos lógicos (DIPs) da janela: recolhida (aba) e expandida (painel).
 const COLLAPSED: (f64, f64) = (56.0, 112.0);
-const EXPANDED: (f64, f64) = (272.0, 356.0);
+const EXPANDED: (f64, f64) = (272.0, 490.0);
 
 struct AppState {
     snapshot: Mutex<Snapshot>,
     team: Mutex<Option<i64>>,
+    /// Cache do gasto (centavos) de dias já encerrados, por data (AAAA-MM-DD).
+    days: Mutex<std::collections::HashMap<String, f64>>,
     notify: Notify,
 }
 
@@ -74,8 +76,10 @@ async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
         return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()));
     };
     let mut team = *state.team.lock().unwrap();
-    let result = usage::fetch(client, &cookie, &mut team).await;
+    let mut days = std::mem::take(&mut *state.days.lock().unwrap());
+    let result = usage::fetch(client, &cookie, &mut team, &mut days).await;
     *state.team.lock().unwrap() = team;
+    *state.days.lock().unwrap() = days;
     match result {
         Ok(s) => s,
         Err(FetchError::Auth) => {
@@ -157,6 +161,7 @@ fn main() {
             let state = AppState {
                 snapshot: Mutex::new(Snapshot::empty("loading", None)),
                 team: Mutex::new(None),
+                days: Mutex::new(Default::default()),
                 notify: Notify::new(),
             };
             let snap = run_once(&http_client(), &state).await;
@@ -168,6 +173,7 @@ fn main() {
     let state = Arc::new(AppState {
         snapshot: Mutex::new(Snapshot::empty("loading", None)),
         team: Mutex::new(None),
+        days: Mutex::new(Default::default()),
         notify: Notify::new(),
     });
 

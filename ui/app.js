@@ -27,6 +27,52 @@ function drawTicks(lowMax, highMin, max) {
   $("scale-max").textContent = max % 1 === 0 ? max : max.toFixed(1);
 }
 
+// ---------- equalizador semanal (seg–sex) ----------
+const SEGMENTS = 10;
+const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex"];
+const eqCols = DAY_LABELS.map((label) => {
+  const col = document.createElement("div");
+  col.className = "col future";
+  const stack = document.createElement("div");
+  stack.className = "stack";
+  const segs = [];
+  for (let i = SEGMENTS - 1; i >= 0; i--) {
+    const seg = document.createElement("i");
+    seg.className = "seg";
+    // verde (embaixo) -> amarelo -> vermelho (em cima)
+    seg.style.setProperty("--c", `hsl(${Math.round(140 - i * 15)} 80% 55%)`);
+    stack.appendChild(seg);
+    segs[i] = seg;
+  }
+  const lbl = document.createElement("span");
+  lbl.className = "lbl";
+  lbl.textContent = label;
+  const val = document.createElement("span");
+  val.className = "val";
+  col.append(stack, lbl, val);
+  $("eq").appendChild(col);
+  return { col, segs, val };
+});
+
+function renderWeek(s) {
+  const week = s.week_usd ?? s.weekUsd ?? [];
+  const max = s.dayMaxUsd || 100;
+  let total = 0;
+  eqCols.forEach(({ col, segs, val }, i) => {
+    const v = week[i];
+    const has = typeof v === "number";
+    if (has) total += v;
+    const over = has && v > max;
+    const lit = !has ? 0 : Math.min(SEGMENTS, Math.ceil(v / max * SEGMENTS - 1e-9));
+    col.classList.toggle("future", !has);
+    col.classList.toggle("over", over);
+    col.classList.toggle("today", s.weekToday === i);
+    segs.forEach((seg, k) => seg.classList.toggle("on", k < lit));
+    val.textContent = has ? "$" + Math.round(v) : "";
+  });
+  $("week-total").textContent = week.some((v) => typeof v === "number") ? usd(total, 0) : "";
+}
+
 // ---------- estado ----------
 let snap = null;
 let expanded = false;
@@ -63,6 +109,8 @@ function render(s) {
   $("cycle-limit").textContent = "de " + usd(s.cycleLimitUsd, 0);
   $("cycle-pct").textContent = pct.toFixed(1).replace(".", ",") + "%";
   $("cycle-fill").style.width = Math.min(pct, 100) + "%";
+
+  renderWeek(s);
 
   // projeção linear até o fim do ciclo
   const proj = $("projection");
