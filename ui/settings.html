@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configurações · Cursor Usage</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <form id="form" novalidate>
+    <h1>Configurações</h1>
+
+    <fieldset>
+      <legend>Cota mensal</legend>
+      <div class="seg-toggle">
+        <label><input type="radio" name="quotaMode" value="auto" /> Automático (do Cursor)</label>
+        <label><input type="radio" name="quotaMode" value="manual" /> Manual</label>
+      </div>
+      <label class="field" data-field="quotaUsd">
+        <span>Valor da cota (US$)</span>
+        <input name="quotaUsd" type="number" step="any" min="0" />
+        <small class="err"></small>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Ritmo</legend>
+      <label class="field" data-field="windowHours">
+        <span>Janela de cálculo (horas)</span>
+        <input name="windowHours" type="number" step="0.5" min="0.5" max="24" />
+        <small class="err"></small>
+      </label>
+      <label class="field" data-field="rateMax">
+        <span>Fim da escala do velocímetro (US$/h)</span>
+        <input name="rateMax" type="number" step="any" min="0" />
+        <small class="err"></small>
+      </label>
+      <label class="field" data-field="lowMax">
+        <span>Baixo até (US$/h)</span>
+        <input name="lowMax" type="number" step="any" min="0" />
+        <small class="err"></small>
+      </label>
+      <label class="field" data-field="highMin">
+        <span>Alto a partir de (US$/h)</span>
+        <input name="highMin" type="number" step="any" min="0" />
+        <small class="err"></small>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Semana</legend>
+      <label class="field" data-field="dayMaxUsd">
+        <span>Escala diária do equalizador (US$)</span>
+        <input name="dayMaxUsd" type="number" step="any" min="1" />
+        <small class="err"></small>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Geral</legend>
+      <label class="field" data-field="pollSeconds">
+        <span>Atualizar a cada (segundos)</span>
+        <input name="pollSeconds" type="number" step="1" min="10" />
+        <small class="err"></small>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Cores</legend>
+      <div class="colors">
+        <label class="field" data-field="colors.accent">
+          <span>Destaque</span>
+          <input name="colors.accent" type="color" />
+          <small class="err"></small>
+        </label>
+        <label class="field" data-field="colors.low">
+          <span>Baixo</span>
+          <input name="colors.low" type="color" />
+          <small class="err"></small>
+        </label>
+        <label class="field" data-field="colors.mid">
+          <span>Médio</span>
+          <input name="colors.mid" type="color" />
+          <small class="err"></small>
+        </label>
+        <label class="field" data-field="colors.high">
+          <span>Alto</span>
+          <input name="colors.high" type="color" />
+          <small class="err"></small>
+        </label>
+      </div>
+      <button type="button" id="reset-colors" class="link">Restaurar cores padrão</button>
+    </fieldset>
+
+    <p id="form-msg" class="form-msg" hidden></p>
+
+    <footer>
+      <button type="button" id="reset-all" class="link">Restaurar tudo</button>
+      <span class="spacer"></span>
+      <button type="button" id="cancel" class="secondary">Cancelar</button>
+      <button type="submit" class="primary">Salvar</button>
+    </footer>
+  </form>
+  <script src="settings.js"></script>
+</body>
+</html>

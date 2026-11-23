@@ -5,7 +5,7 @@ mod config;
 mod settings;
 mod usage;
 
-use settings::Settings;
+use settings::{SaveError, Settings};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -26,7 +26,6 @@ const EXPANDED: (f64, f64) = (272.0, 490.0);
 struct AppState {
     snapshot: Mutex<Snapshot>,
     settings: Mutex<Settings>,
-    #[allow(dead_code)]
     settings_path: Option<PathBuf>,
     team: Mutex<Option<i64>>,
     /// Cache do gasto (centavos) de dias já encerrados, por data (AAAA-MM-DD).
@@ -110,10 +109,18 @@ async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
             &settings,
         ),
         Err(FetchError::Other(msg)) => {
-            // Mantém os últimos números bons e só sinaliza o erro.
+            // Mantém os últimos números bons e só sinaliza o erro; as escalas seguem as configurações atuais.
             let mut prev = state.snapshot.lock().unwrap().clone();
             prev.status = "error".into();
             prev.message = Some(msg);
+            prev.low_max = settings.low_max;
+            prev.high_min = settings.high_min;
+            prev.rate_max = settings.rate_max;
+            prev.day_max_usd = settings.day_max_usd;
+            prev.level = usage::level_of(prev.rate_per_hour, prev.low_max, prev.high_min).into();
+            if settings.quota_mode == settings::QuotaMode::Manual {
+                prev.cycle_limit_usd = settings.quota_usd;
+            }
             prev
         }
     }
@@ -177,6 +184,59 @@ fn set_expanded(window: WebviewWindow, expanded: bool) {
     place(&window, expanded);
 }
 
+#[tauri::command]
+fn get_settings(state: State<'_, Arc<AppState>>) -> Settings {
+    state.settings.lock().unwrap().clone()
+}
+
+#[tauri::command]
+fn default_settings() -> Settings {
+    Settings::default()
+}
+
+#[tauri::command]
+fn save_settings(
+    app: tauri::AppHandle,
+    settings: Settings,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Settings, SaveError> {
+    if let Err(fields) = settings.validate() {
+        return Err(SaveError { message: "Corrija os campos destacados.".into(), fields });
+    }
+    let path = state.settings_path.as_ref().ok_or_else(|| SaveError {
+        message: "Pasta de configurações (APPDATA) não encontrada.".into(),
+        fields: Vec::new(),
+    })?;
+    settings::save(path, &settings).map_err(|message| SaveError { message, fields: Vec::new() })?;
+    *state.settings.lock().unwrap() = settings.clone();
+    let _ = app.emit("settings", &settings);
+    state.notify.notify_one();
+    Ok(settings)
+}
+
+/// Abre a janela de configurações ou a traz para a frente se já estiver aberta.
+fn show_settings(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let _ = tauri::WebviewWindowBuilder::new(app, "settings", tauri::WebviewUrl::App("settings.html".into()))
+        .title("Configurações · Cursor Usage")
+        .inner_size(420.0, 640.0)
+        .resizable(false)
+        .maximizable(false)
+        .center()
+        .build();
+}
+
+// Assíncrono: criar janela num comando síncrono trava no Windows.
+#[tauri::command]
+async fn open_settings(app: tauri::AppHandle) {
+    show_settings(&app);
+}
+
 fn main() {
     // Modo diagnóstico: `cursor-usage-widget --once` imprime o snapshot e sai.
     if std::env::args().any(|a| a == "--once") {
@@ -198,7 +258,11 @@ fn main() {
             get_snapshot,
             refresh_now,
             set_cookie,
-            set_expanded
+            set_expanded,
+            get_settings,
+            default_settings,
+            save_settings,
+            open_settings
         ])
         .setup(move |app| {
             register_toast_identity(&app.config().identifier);
@@ -206,6 +270,7 @@ fn main() {
             place(&win, false);
 
             let refresh = MenuItem::with_id(app, "refresh", "Atualizar agora", true, None::<&str>)?;
+            let open_cfg = MenuItem::with_id(app, "settings", "Configurações…", true, None::<&str>)?;
             let toggle = MenuItem::with_id(app, "toggle", "Mostrar/ocultar", true, None::<&str>)?;
             let auto = CheckMenuItem::with_id(
                 app,
@@ -216,7 +281,7 @@ fn main() {
                 None::<&str>,
             )?;
             let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&refresh, &toggle, &auto, &quit])?;
+            let menu = Menu::with_items(app, &[&refresh, &open_cfg, &toggle, &auto, &quit])?;
             let st = state.clone();
             let auto_item = auto.clone();
             TrayIconBuilder::new()
@@ -225,6 +290,7 @@ fn main() {
                 .menu(&menu)
                 .on_menu_event(move |app, ev| match ev.id.as_ref() {
                     "refresh" => st.notify.notify_one(),
+                    "settings" => show_settings(app),
                     "toggle" => {
                         if let Some(w) = app.get_webview_window("main") {
                             if w.is_visible().unwrap_or(true) {
