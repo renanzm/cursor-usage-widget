@@ -121,8 +121,8 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .col .val { font-size: 9.5px; color: var(--g5); font-variant-numeric: tabular-nums; min-height: 12px; }
 .col.today .lbl { color: var(--orange); }
 .col.future .lbl { color: var(--g4); }
-.col.over .seg.on { --c: #bf5af2; background: #bf5af2; animation: blink .8s ease-in-out infinite; }
-.col.over .val { color: #bf5af2; font-weight: 700; }
+.col.over .seg.on:first-child { --c: var(--red); background: var(--red); animation: blink .8s ease-in-out infinite; }
+.col.over .val { color: var(--red); font-weight: 700; }
 @keyframes blink { 50% { opacity: .35; box-shadow: none; } }
 
 .msg { margin-top: 8px; font-size: 11px; color: var(--red); }
