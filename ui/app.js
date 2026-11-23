@@ -9,6 +9,15 @@ const usd = (v, d = 2) =>
     .replace("US$", "US$ ")
     .replace(/\s+/g, " ");
 const LEVEL_LABEL = { low: "Baixo", mid: "Médio", high: "Alto" };
+const hoursLabel = (h) => (Number.isInteger(h) ? String(h) : h.toFixed(1).replace(".", ",")) + "h";
+
+function applyColors(c) {
+  const st = document.documentElement.style;
+  st.setProperty("--orange", c.accent);
+  st.setProperty("--lvl-low", c.low);
+  st.setProperty("--lvl-mid", c.mid);
+  st.setProperty("--lvl-high", c.high);
+}
 
 // ---------- velocímetro (arco único com degradê) ----------
 const CX = 100, CY = 100, R = 78;
@@ -79,7 +88,7 @@ let expanded = false;
 let leaveTimer = null;
 
 const cycleColor = (pct) =>
-  pct >= 90 ? "#ff453a" : pct >= 75 ? "#ff6a00" : "#ff9f0a";
+  pct >= 90 ? "#ff453a" : pct >= 75 ? "#ff6a00" : "var(--orange)";
 
 function render(s) {
   snap = s;
@@ -92,6 +101,10 @@ function render(s) {
   // aba
   $("tab-amount").textContent = s.status === "auth" ? "!" : "$" + Math.round(s.cycleUsedUsd);
   $("tab-fill").style.height = Math.min(pct, 100) + "%";
+
+  const wh = hoursLabel(s.windowHours ?? 3);
+  $("window-label").textContent = wh;
+  $("window-hours").textContent = wh;
 
   // velocímetro
   drawTicks(s.lowMax, s.highMin, s.rateMax);
@@ -160,6 +173,8 @@ document.addEventListener("mouseenter", expand);
 document.addEventListener("mouseleave", collapseSoon);
 root.addEventListener("mouseenter", expand);
 root.addEventListener("dblclick", () => invoke("refresh_now"));
+$("open-settings").addEventListener("click", () => invoke("open_settings"));
+$("open-settings").addEventListener("dblclick", (e) => e.stopPropagation());
 
 $("cookie-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -178,5 +193,7 @@ $("cookie-form").addEventListener("submit", async (e) => {
 
 // ---------- inicialização ----------
 listen("usage", (ev) => render(ev.payload));
+listen("settings", (ev) => applyColors(ev.payload.colors));
+invoke("get_settings").then((s) => applyColors(s.colors));
 invoke("get_snapshot").then(render);
 setInterval(() => snap && render(snap), 60_000);
