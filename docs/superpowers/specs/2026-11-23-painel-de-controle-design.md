@@ -27,11 +27,13 @@ Este é o primeiro de dois subprojetos. O segundo (suporte ao Claude Code, com c
 | Ritmo | `lowMax` (baixo até, US$/h) | 6 | 0 < valor < `highMin` |
 | Ritmo | `highMin` (alto a partir de, US$/h) | 13 | < `rateMax` |
 | Semana | `dayMaxUsd` | 100 | ≥ 1 |
-| Geral | `pollSeconds` | 30 | ≥ 10 |
+| Geral | `pollSeconds` | 30 | 10 ≤ valor ≤ 3600 |
 | Cores | `colors.accent` | `#ff9f0a` | `#rrggbb` |
 | Cores | `colors.low` | `#30d158` | `#rrggbb` |
 | Cores | `colors.mid` | `#ffd60a` | `#rrggbb` |
 | Cores | `colors.high` | `#ff453a` | `#rrggbb` |
+
+Todos os campos numéricos precisam ser finitos.
 
 Classificação do nível (inalterada): baixo se `ritmo ≤ lowMax`; médio se `ritmo < highMin`; alto caso contrário. O ritmo é `gasto da janela / windowHours`.
 

@@ -91,25 +91,25 @@ impl Settings {
         let mut err = |field: &'static str, message: &str| {
             errs.push(FieldError { field, message: message.into() })
         };
-        if !(self.quota_usd > 0.0) {
+        if !(self.quota_usd.is_finite() && self.quota_usd > 0.0) {
             err("quotaUsd", "A cota precisa ser maior que zero.");
         }
-        if !(self.window_hours >= 0.5 && self.window_hours <= 24.0) {
+        if !(self.window_hours.is_finite() && self.window_hours >= 0.5 && self.window_hours <= 24.0) {
             err("windowHours", "A janela precisa estar entre 0,5 e 24 horas.");
         }
-        if !(self.low_max > 0.0) {
+        if !(self.low_max.is_finite() && self.low_max > 0.0) {
             err("lowMax", "Baixo precisa ser maior que zero.");
         } else if !(self.low_max < self.high_min) {
             err("lowMax", "Baixo precisa ser menor que Alto.");
         }
-        if !(self.high_min < self.rate_max) {
+        if !(self.high_min.is_finite() && self.rate_max.is_finite() && self.high_min < self.rate_max) {
             err("highMin", "Alto precisa ser menor que o fim da escala.");
         }
-        if !(self.day_max_usd >= 1.0) {
+        if !(self.day_max_usd.is_finite() && self.day_max_usd >= 1.0) {
             err("dayMaxUsd", "A escala diária precisa ser de pelo menos 1.");
         }
-        if !(self.poll_seconds >= 10.0) {
-            err("pollSeconds", "O intervalo mínimo é de 10 segundos.");
+        if !(self.poll_seconds.is_finite() && self.poll_seconds >= 10.0 && self.poll_seconds <= 3600.0) {
+            err("pollSeconds", "O intervalo precisa estar entre 10 e 3600 segundos.");
         }
         for (field, value) in [
             ("colors.accent", &self.colors.accent),
@@ -164,6 +164,7 @@ impl Settings {
 
 /// Lê o JSON campo a campo: o que faltar, tiver tipo errado ou violar regra vira padrão.
 pub fn parse(text: &str) -> Settings {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let Ok(v) = serde_json::from_str::<Value>(text) else {
         return Settings::default();
     };
@@ -288,6 +289,29 @@ mod tests {
     }
 
     #[test]
+    fn poll_seconds_bounds() {
+        for (p, ok) in [(10.0, true), (3600.0, true), (9.0, false), (3601.0, false), (1e20, false), (f64::INFINITY, false)] {
+            let s = Settings { poll_seconds: p, ..Default::default() };
+            assert_eq!(fields(&s).contains(&"pollSeconds"), !ok, "intervalo {p}");
+        }
+    }
+
+    #[test]
+    fn non_finite_numbers_are_invalid() {
+        let s = Settings { quota_usd: f64::INFINITY, ..Default::default() };
+        assert_eq!(fields(&s), vec!["quotaUsd"]);
+        let s = Settings { window_hours: f64::NAN, ..Default::default() };
+        assert_eq!(fields(&s), vec!["windowHours"]);
+        let s = Settings { rate_max: f64::INFINITY, ..Default::default() };
+        assert!(fields(&s).contains(&"highMin"));
+    }
+
+    #[test]
+    fn sanitize_replaces_huge_poll_seconds() {
+        assert_eq!(Settings { poll_seconds: 1e20, ..Default::default() }.sanitize().poll_seconds, 30.0);
+    }
+
+    #[test]
     fn colors_must_be_hex() {
         let mut s = Settings::default();
         s.colors.accent = "red".into();
@@ -312,6 +336,13 @@ mod tests {
         assert_eq!(s.poll_seconds, 30.0);
         assert_eq!(s.day_max_usd, 50.0);
         assert_eq!((s.low_max, s.high_min, s.rate_max), (6.0, 13.0, 20.0));
+    }
+
+    #[test]
+    fn parse_accepts_utf8_bom() {
+        let s = parse("\u{feff}{\"quotaMode\":\"manual\",\"quotaUsd\":250}");
+        assert_eq!(s.quota_mode, QuotaMode::Manual);
+        assert_eq!(s.quota_usd, 250.0);
     }
 
     #[test]

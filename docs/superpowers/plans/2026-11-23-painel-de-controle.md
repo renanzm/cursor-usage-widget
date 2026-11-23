@@ -18,7 +18,7 @@
 - Arquivo de configurações: `%APPDATA%\dev.local.cursor-usage-widget\settings.json` (o identificador vem de `tauri.conf.json`).
 - Chaves JSON em camelCase: `quotaMode`, `quotaUsd`, `windowHours`, `rateMax`, `lowMax`, `highMin`, `dayMaxUsd`, `pollSeconds`, `colors.{accent,low,mid,high}`.
 - Padrões: `quotaMode` `"auto"`, `quotaUsd` 1000, `windowHours` 3, `rateMax` 20, `lowMax` 6, `highMin` 13, `dayMaxUsd` 100, `pollSeconds` 30, cores `#ff9f0a` / `#30d158` / `#ffd60a` / `#ff453a`.
-- Regras: `quotaUsd > 0`; `0,5 ≤ windowHours ≤ 24`; `0 < lowMax < highMin`; `highMin < rateMax`; `dayMaxUsd ≥ 1`; `pollSeconds ≥ 10`; cores `#rrggbb`.
+- Regras: `quotaUsd > 0`; `0,5 ≤ windowHours ≤ 24`; `0 < lowMax < highMin`; `highMin < rateMax`; `dayMaxUsd ≥ 1`; `10 ≤ pollSeconds ≤ 3600`; cores `#rrggbb`.
 - O cookie continua no Credential Manager; nada de cookie no `settings.json`.
 - Comandos `cargo` rodam em `src-tauri/`.
 

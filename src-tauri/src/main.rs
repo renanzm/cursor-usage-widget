@@ -290,7 +290,10 @@ fn main() {
                 .menu(&menu)
                 .on_menu_event(move |app, ev| match ev.id.as_ref() {
                     "refresh" => st.notify.notify_one(),
-                    "settings" => show_settings(app),
+                    "settings" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { show_settings(&app) });
+                    }
                     "toggle" => {
                         if let Some(w) = app.get_webview_window("main") {
                             if w.is_visible().unwrap_or(true) {
