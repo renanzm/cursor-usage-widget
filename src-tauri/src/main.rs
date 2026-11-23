@@ -2,6 +2,7 @@
 
 mod alerts;
 mod config;
+mod settings;
 mod usage;
 
 use std::{
