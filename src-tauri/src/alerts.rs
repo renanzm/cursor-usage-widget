@@ -30,6 +30,14 @@ fn usd(v: f64) -> String {
     format!("US$ {v:.2}")
 }
 
+fn hours(h: f64) -> String {
+    if h.fract() == 0.0 {
+        format!("{h:.0}")
+    } else {
+        format!("{h:.1}").replace('.', ",")
+    }
+}
+
 pub fn notify(app: &tauri::AppHandle, title: &str, body: &str) {
     let _ = app.notification().builder().title(title).body(body).show();
 }
@@ -87,8 +95,9 @@ impl Alerts {
                     app,
                     "Cursor: ritmo de gasto alto",
                     &format!(
-                        "{}/h nas últimas 3h ({} no período).",
+                        "{}/h nas últimas {}h ({} no período).",
                         usd(s.rate_per_hour),
+                        hours(s.window_hours),
                         usd(s.window_usd)
                     ),
                 );

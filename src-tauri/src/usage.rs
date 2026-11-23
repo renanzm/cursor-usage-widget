@@ -1,5 +1,5 @@
 //! Consulta dos endpoints internos do dashboard do Cursor (não documentados).
-use crate::config;
+use crate::settings::Settings;
 use chrono::{Datelike, Duration, Local, NaiveDate, TimeZone};
 use reqwest::{Client, Method, StatusCode};
 use serde::Serialize;
@@ -10,7 +10,6 @@ use std::{
 };
 
 const BASE: &str = "https://cursor.com";
-const WINDOW_HOURS: f64 = 3.0;
 const PAGE_SIZE: u64 = 100;
 const MAX_PAGES: u64 = 30;
 
@@ -27,6 +26,8 @@ pub struct Snapshot {
     pub window_usd: f64,
     pub window_events: u64,
     pub rate_per_hour: f64,
+    /// Janela (horas) usada no cálculo do ritmo.
+    pub window_hours: f64,
     /// "low" | "mid" | "high"
     pub level: String,
     pub low_max: f64,
@@ -43,26 +44,38 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub fn empty(status: &str, message: Option<String>) -> Self {
+    pub fn empty(status: &str, message: Option<String>, s: &Settings) -> Self {
         Snapshot {
             status: status.into(),
             message,
             cycle_used_usd: 0.0,
-            cycle_limit_usd: config::setting_f64("CYCLE_LIMIT_USD", 1000.0),
+            cycle_limit_usd: s.cycle_limit(None),
             cycle_start: None,
             cycle_end: None,
             window_usd: 0.0,
             window_events: 0,
             rate_per_hour: 0.0,
+            window_hours: s.window_hours,
             level: "low".into(),
-            low_max: config::setting_f64("RATE_LOW_MAX", 6.0),
-            high_min: config::setting_f64("RATE_HIGH_MIN", 13.0),
-            rate_max: config::setting_f64("RATE_MAX", 20.0).max(1.0),
+            low_max: s.low_max,
+            high_min: s.high_min,
+            rate_max: s.rate_max,
             week_usd: Vec::new(),
             week_today: None,
-            day_max_usd: config::setting_f64("DAY_MAX_USD", 100.0).max(1.0),
+            day_max_usd: s.day_max_usd,
             updated_at_ms: now_ms(),
         }
+    }
+}
+
+/// Baixo: até `low_max` (inclusive); Médio: abaixo de `high_min`; Alto: `high_min` ou mais.
+pub fn level_of(rate: f64, low_max: f64, high_min: f64) -> &'static str {
+    if rate <= low_max {
+        "low"
+    } else if rate < high_min {
+        "mid"
+    } else {
+        "high"
     }
 }
 
@@ -210,6 +223,7 @@ async fn week_usage(
 pub async fn fetch(
     client: &Client,
     cookie: &str,
+    settings: &Settings,
     team_cache: &mut Option<i64>,
     day_cache: &mut HashMap<String, f64>,
 ) -> Result<Snapshot, FetchError> {
@@ -223,32 +237,35 @@ pub async fn fetch(
     let team_id = team_cache.unwrap_or(-1);
 
     let end = now_ms();
-    let start = end.saturating_sub((WINDOW_HOURS * 3_600_000.0) as u64);
+    let start = end.saturating_sub((settings.window_hours * 3_600_000.0) as u64);
     let (cents, events) = window_cost(client, cookie, team_id, start, end).await?;
 
     let (week, week_today) = week_usage(client, cookie, team_id, day_cache).await?;
 
     let overall = &summary["individualUsage"]["overall"];
-    let mut snap = Snapshot::empty("ok", None);
+    let mut snap = Snapshot::empty("ok", None, settings);
     snap.week_usd = week;
     snap.week_today = week_today;
     snap.cycle_used_usd = overall["used"].as_f64().unwrap_or(0.0) / 100.0;
-    if let Some(limit) = overall["limit"].as_f64() {
-        snap.cycle_limit_usd = limit / 100.0;
-    }
+    snap.cycle_limit_usd = settings.cycle_limit(overall["limit"].as_f64().map(|c| c / 100.0));
     snap.cycle_start = summary["billingCycleStart"].as_str().map(String::from);
     snap.cycle_end = summary["billingCycleEnd"].as_str().map(String::from);
     snap.window_usd = cents / 100.0;
     snap.window_events = events;
-    snap.rate_per_hour = snap.window_usd / WINDOW_HOURS;
-    // Baixo: até low_max (inclusive); Médio: abaixo de high_min; Alto: high_min ou mais.
-    snap.level = if snap.rate_per_hour <= snap.low_max {
-        "low"
-    } else if snap.rate_per_hour < snap.high_min {
-        "mid"
-    } else {
-        "high"
-    }
-    .into();
+    snap.rate_per_hour = snap.window_usd / settings.window_hours;
+    snap.level = level_of(snap.rate_per_hour, snap.low_max, snap.high_min).into();
     Ok(snap)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::level_of;
+
+    #[test]
+    fn level_boundaries_with_custom_limits() {
+        assert_eq!(level_of(2.0, 2.0, 5.0), "low");
+        assert_eq!(level_of(2.01, 2.0, 5.0), "mid");
+        assert_eq!(level_of(4.99, 2.0, 5.0), "mid");
+        assert_eq!(level_of(5.0, 2.0, 5.0), "high");
+    }
 }

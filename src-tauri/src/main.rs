@@ -5,7 +5,9 @@ mod config;
 mod settings;
 mod usage;
 
+use settings::Settings;
 use std::{
+    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -23,10 +25,28 @@ const EXPANDED: (f64, f64) = (272.0, 490.0);
 
 struct AppState {
     snapshot: Mutex<Snapshot>,
+    settings: Mutex<Settings>,
+    #[allow(dead_code)]
+    settings_path: Option<PathBuf>,
     team: Mutex<Option<i64>>,
     /// Cache do gasto (centavos) de dias já encerrados, por data (AAAA-MM-DD).
     days: Mutex<std::collections::HashMap<String, f64>>,
     notify: Notify,
+}
+
+impl AppState {
+    fn new() -> Self {
+        let settings_path = settings::default_path();
+        let settings = settings::load_or_init(settings_path.as_deref());
+        AppState {
+            snapshot: Mutex::new(Snapshot::empty("loading", None, &settings)),
+            settings: Mutex::new(settings),
+            settings_path,
+            team: Mutex::new(None),
+            days: Mutex::new(Default::default()),
+            notify: Notify::new(),
+        }
+    }
 }
 
 // ---------- iniciar com o Windows (chave HKCU\...\Run) ----------
@@ -73,19 +93,22 @@ fn http_client() -> reqwest::Client {
 }
 
 async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
+    let settings = state.settings.lock().unwrap().clone();
     let Some(cookie) = config::load_cookie() else {
-        return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()));
+        return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
     };
     let mut team = *state.team.lock().unwrap();
     let mut days = std::mem::take(&mut *state.days.lock().unwrap());
-    let result = usage::fetch(client, &cookie, &mut team, &mut days).await;
+    let result = usage::fetch(client, &cookie, &settings, &mut team, &mut days).await;
     *state.team.lock().unwrap() = team;
     *state.days.lock().unwrap() = days;
     match result {
         Ok(s) => s,
-        Err(FetchError::Auth) => {
-            Snapshot::empty("auth", Some("Sessão expirada: cole o cookie novamente".into()))
-        }
+        Err(FetchError::Auth) => Snapshot::empty(
+            "auth",
+            Some("Sessão expirada: cole o cookie novamente".into()),
+            &settings,
+        ),
         Err(FetchError::Other(msg)) => {
             // Mantém os últimos números bons e só sinaliza o erro.
             let mut prev = state.snapshot.lock().unwrap().clone();
@@ -98,13 +121,13 @@ async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
 
 async fn poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
     let client = http_client();
-    let interval = config::setting_f64("POLL_SECONDS", 30.0).max(10.0);
     let mut alerts = alerts::Alerts::default();
     loop {
         let snap = run_once(&client, &state).await;
         *state.snapshot.lock().unwrap() = snap.clone();
         let _ = app.emit("usage", &snap);
         alerts.check(&app, &snap);
+        let interval = state.settings.lock().unwrap().poll_seconds.max(10.0);
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_secs_f64(interval)) => {}
             _ = state.notify.notified() => {}
@@ -159,24 +182,14 @@ fn main() {
     if std::env::args().any(|a| a == "--once") {
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         rt.block_on(async {
-            let state = AppState {
-                snapshot: Mutex::new(Snapshot::empty("loading", None)),
-                team: Mutex::new(None),
-                days: Mutex::new(Default::default()),
-                notify: Notify::new(),
-            };
+            let state = AppState::new();
             let snap = run_once(&http_client(), &state).await;
             println!("{}", serde_json::to_string_pretty(&snap).unwrap());
         });
         return;
     }
 
-    let state = Arc::new(AppState {
-        snapshot: Mutex::new(Snapshot::empty("loading", None)),
-        team: Mutex::new(None),
-        days: Mutex::new(Default::default()),
-        notify: Notify::new(),
-    });
+    let state = Arc::new(AppState::new());
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
