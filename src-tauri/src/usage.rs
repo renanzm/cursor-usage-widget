@@ -41,6 +41,13 @@ pub struct Snapshot {
     /// Fundo de escala diário do equalizador (US$).
     pub day_max_usd: f64,
     pub updated_at_ms: u64,
+    /// Limites oficiais do plano Claude (status line): % usada e reset (ms) da janela de 5h e da semana.
+    pub limit_5h_pct: Option<f64>,
+    pub limit_5h_resets_ms: Option<i64>,
+    pub limit_7d_pct: Option<f64>,
+    pub limit_7d_resets_ms: Option<i64>,
+    /// Quando o Claude Code gravou esses limites pela última vez.
+    pub limits_updated_ms: Option<u64>,
 }
 
 impl Snapshot {
@@ -64,6 +71,11 @@ impl Snapshot {
             week_today: None,
             day_max_usd: s.day_max_usd,
             updated_at_ms: now_ms(),
+            limit_5h_pct: None,
+            limit_5h_resets_ms: None,
+            limit_7d_pct: None,
+            limit_7d_resets_ms: None,
+            limits_updated_ms: None,
         }
     }
 }

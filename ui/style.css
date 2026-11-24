@@ -114,6 +114,18 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .projection { margin-top: 8px; font-size: 10.5px; color: var(--g5); }
 .projection.warn { color: var(--red); }
 
+/* limites do plano Claude (5h + semana) */
+.limits { display: flex; flex-direction: column; gap: 9px; }
+.lim { --lc: var(--lvl-low); }
+.lim.warn { --lc: var(--lvl-mid); }
+.lim.crit { --lc: var(--lvl-high); }
+.lim-head { display: flex; justify-content: space-between; align-items: center; }
+.lim .bar { margin-top: 5px; }
+.lim .bar i { background: var(--lc); box-shadow: 0 0 10px var(--lc); }
+.lim .pct { color: var(--g5); }
+.lim.warn .pct, .lim.crit .pct { color: var(--lc); }
+.lim-sub { margin-top: 4px; font-size: 10px; color: var(--g5); }
+
 /* equalizador semanal */
 .expanded .r6 { animation-delay: .17s; }
 .week { margin-top: 12px; }
@@ -162,6 +174,7 @@ header { display: flex; justify-content: space-between; align-items: center; }
 [data-state="auth"] .gauge-wrap,
 [data-state="auth"] .rate-block,
 [data-state="auth"] .divider,
+[data-state="auth"] .limits,
 [data-state="auth"] .cycle,
 [data-state="auth"] .week { display: none; }
 [data-state="auth"] .hint { display: block; margin-top: auto; }

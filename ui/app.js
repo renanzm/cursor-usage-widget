@@ -82,6 +82,39 @@ function renderWeek(s) {
   $("week-total").textContent = week.some((v) => typeof v === "number") ? usd(total, 0) : "";
 }
 
+// ---------- limites do plano Claude (5h + semana) ----------
+function fmtReset(ms) {
+  const d = ms - Date.now();
+  if (d <= 0) return "janela já resetou";
+  const h = Math.floor(d / 3600000), m = Math.floor((d % 3600000) / 60000);
+  const rel = h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h ? `${h}h ${m}min` : `${m}min`;
+  return "reseta em " + rel;
+}
+function renderLimit(key, pct, resets) {
+  // Depois do reset a leitura antiga não vale mais: mostra "--" até o Claude Code gravar de novo.
+  const has = typeof pct === "number" && !(resets && resets < Date.now());
+  const p = has ? Math.max(0, pct) : 0;
+  const box = $(`lim${key}-pct`).closest(".lim");
+  box.classList.toggle("warn", has && p >= 75 && p < 90);
+  box.classList.toggle("crit", has && p >= 90);
+  $(`lim${key}-pct`).textContent = has ? Math.round(p) + "%" : "--";
+  $(`lim${key}-fill`).style.width = Math.min(p, 100) + "%";
+  $(`lim${key}-reset`).textContent = typeof resets === "number" ? fmtReset(resets) : "";
+}
+function renderLimits(s) {
+  renderLimit("5", s.limit5hPct, s.limit5hResetsMs);
+  renderLimit("7", s.limit7dPct, s.limit7dResetsMs);
+  const note = $("lim-note");
+  if (s.limitsUpdatedMs) {
+    const min = Math.floor((Date.now() - s.limitsUpdatedMs) / 60000);
+    note.hidden = min < 10;
+    note.textContent = `Última leitura há ${min < 60 ? min + " min" : Math.floor(min / 60) + " h"} (atualiza com o Claude Code aberto)`;
+  } else {
+    note.hidden = false;
+    note.textContent = "Aguardando o Claude Code (abra uma sessão e envie uma mensagem)";
+  }
+}
+
 // ---------- estado ----------
 let snap = null;
 let expanded = false;
@@ -124,6 +157,7 @@ function render(s) {
   $("cycle-fill").style.width = Math.min(pct, 100) + "%";
 
   renderWeek(s);
+  renderLimits(s);
 
   // projeção linear até o fim do ciclo
   const proj = $("projection");

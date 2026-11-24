@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod alerts;
+mod claude;
 mod config;
 mod settings;
 mod usage;
@@ -21,7 +22,7 @@ use usage::{FetchError, Snapshot};
 
 // Tamanhos lógicos (DIPs) da janela: recolhida (aba) e expandida (painel).
 const COLLAPSED: (f64, f64) = (56.0, 112.0);
-const EXPANDED: (f64, f64) = (272.0, 490.0);
+const EXPANDED: (f64, f64) = (272.0, 600.0);
 
 struct AppState {
     snapshot: Mutex<Snapshot>,
@@ -91,16 +92,26 @@ fn http_client() -> reqwest::Client {
         .expect("cliente HTTP")
 }
 
+/// Fonte dos dados: `USAGE_SOURCE=claude` (padrão, logs locais do Claude Code) ou `cursor` (dashboard web).
+fn source_is_cursor() -> bool {
+    config::setting("USAGE_SOURCE").is_some_and(|s| s.eq_ignore_ascii_case("cursor"))
+}
+
 async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
     let settings = state.settings.lock().unwrap().clone();
-    let Some(cookie) = config::load_cookie() else {
-        return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
+    let result = if source_is_cursor() {
+        let Some(cookie) = config::load_cookie() else {
+            return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
+        };
+        let mut team = *state.team.lock().unwrap();
+        let mut days = std::mem::take(&mut *state.days.lock().unwrap());
+        let r = usage::fetch(client, &cookie, &settings, &mut team, &mut days).await;
+        *state.team.lock().unwrap() = team;
+        *state.days.lock().unwrap() = days;
+        r
+    } else {
+        claude::fetch(&settings).await.map_err(FetchError::Other)
     };
-    let mut team = *state.team.lock().unwrap();
-    let mut days = std::mem::take(&mut *state.days.lock().unwrap());
-    let result = usage::fetch(client, &cookie, &settings, &mut team, &mut days).await;
-    *state.team.lock().unwrap() = team;
-    *state.days.lock().unwrap() = days;
     match result {
         Ok(s) => s,
         Err(FetchError::Auth) => Snapshot::empty(
