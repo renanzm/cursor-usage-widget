@@ -231,15 +231,41 @@ function render(s) {
   $("clock").textContent = new Date(s.updatedAtMs).toLocaleTimeString("pt-BR", {
     hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
+  refit();
 }
 
 // ---------- expandir/recolher ----------
+const PANEL_W = 272;
+let panelH = null;
+
+// Altura que o painel precisa (o bloco de limites some no Cursor, a nota some quando a leitura é recente).
+// Mede fora da tela, já na largura do painel, mesmo com a janela ainda recolhida.
+function neededHeight() {
+  const p = document.querySelector(".panel");
+  const prev = p.style.cssText;
+  p.style.cssText = `display:flex;visibility:hidden;width:${PANEL_W - 1}px;right:auto;bottom:auto;height:auto`;
+  const h = p.offsetHeight;
+  p.style.cssText = prev;
+  return Math.ceil(h) + 2; // bordas de cima e de baixo do widget
+}
+
 async function expand() {
   clearTimeout(leaveTimer);
   if (expanded) return;
   expanded = true;
-  await invoke("set_expanded", { expanded: true });
+  panelH = neededHeight();
+  await invoke("set_expanded", { expanded: true, height: panelH });
   root.classList.add("expanded");
+}
+
+// Conteúdo mudou com o painel aberto: ajusta a altura sem fechar.
+function refit() {
+  if (!expanded) return;
+  const h = neededHeight();
+  if (h !== panelH) {
+    panelH = h;
+    invoke("set_expanded", { expanded: true, height: h });
+  }
 }
 function collapseSoon() {
   clearTimeout(leaveTimer);

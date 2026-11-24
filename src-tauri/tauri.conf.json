@@ -13,7 +13,7 @@
         "label": "main",
         "title": "Cursor Usage",
         "width": 56,
-        "height": 112,
+        "height": 128,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
