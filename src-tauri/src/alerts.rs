@@ -1,5 +1,5 @@
 //! Notificações do Windows: cruzamento de 75/90/100% do ciclo e ritmo "Alto".
-use crate::usage::Snapshot;
+use crate::{i18n::is_en, usage::Snapshot};
 use std::time::{Duration, Instant};
 use tauri_plugin_notification::NotificationExt;
 
@@ -27,12 +27,18 @@ fn stage_of(pct: f64) -> u8 {
 }
 
 fn usd(v: f64) -> String {
-    format!("US$ {v:.2}")
+    if is_en() {
+        format!("${v:.2}")
+    } else {
+        format!("US$ {v:.2}").replace('.', ",")
+    }
 }
 
 fn hours(h: f64) -> String {
     if h.fract() == 0.0 {
         format!("{h:.0}")
+    } else if is_en() {
+        format!("{h:.1}")
     } else {
         format!("{h:.1}").replace('.', ",")
     }
@@ -71,20 +77,15 @@ impl Alerts {
 
         if stage > self.stage {
             let restante = (s.cycle_limit_usd - s.cycle_used_usd).max(0.0);
-            let (title, body) = match stage {
-                100 => (
-                    format!("{src}: limite do ciclo atingido"),
-                    format!("{} de {} usados.", usd(s.cycle_used_usd), usd(s.cycle_limit_usd)),
-                ),
-                n => (
+            let (used, limit, left) = (usd(s.cycle_used_usd), usd(s.cycle_limit_usd), usd(restante));
+            let (title, body) = match (stage, is_en()) {
+                (100, false) => (format!("{src}: limite do ciclo atingido"), format!("{used} de {limit} usados.")),
+                (100, true) => (format!("{src}: cycle limit reached"), format!("{used} of {limit} used.")),
+                (n, false) => (
                     format!("{src}: {n}% do limite do ciclo"),
-                    format!(
-                        "{} de {} usados · restam {}.",
-                        usd(s.cycle_used_usd),
-                        usd(s.cycle_limit_usd),
-                        usd(restante)
-                    ),
+                    format!("{used} de {limit} usados · restam {left}."),
                 ),
+                (n, true) => (format!("{src}: {n}% of the cycle limit"), format!("{used} of {limit} used · {left} left.")),
             };
             notify(app, &title, &body);
         }
@@ -96,16 +97,13 @@ impl Alerts {
                 .map(|t| t.elapsed() >= HIGH_COOLDOWN)
                 .unwrap_or(true);
             if cooled {
-                notify(
-                    app,
-                    &format!("{src}: ritmo de gasto alto"),
-                    &format!(
-                        "{}/h nas últimas {}h ({} no período).",
-                        usd(s.rate_per_hour),
-                        hours(s.window_hours),
-                        usd(s.window_usd)
-                    ),
-                );
+                let (rate, h, win) = (usd(s.rate_per_hour), hours(s.window_hours), usd(s.window_usd));
+                let (title, body) = if is_en() {
+                    (format!("{src}: high spending pace"), format!("{rate}/h over the last {h}h ({win} in the period)."))
+                } else {
+                    (format!("{src}: ritmo de gasto alto"), format!("{rate}/h nas últimas {h}h ({win} no período)."))
+                };
+                notify(app, &title, &body);
                 self.last_high_alert = Some(Instant::now());
             }
         }

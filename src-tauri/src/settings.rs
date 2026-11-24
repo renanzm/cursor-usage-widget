@@ -1,5 +1,5 @@
 //! Configurações do usuário (painel): `settings.json` na pasta de dados do app.
-use crate::config;
+use crate::{config, i18n::tr};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -46,6 +46,16 @@ impl Source {
             _ => Source::Auto,
         }
     }
+}
+
+/// Idioma da interface. `Auto` segue o Windows.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    #[default]
+    Auto,
+    En,
+    Pt,
 }
 
 /// Borda da tela em que o widget fica encostado.
@@ -101,6 +111,9 @@ pub struct Settings {
     /// Lado do monitor em que o widget fica.
     #[serde(default)]
     pub side: Side,
+    /// Idioma dos textos.
+    #[serde(default)]
+    pub language: Language,
     pub colors: Colors,
 }
 
@@ -119,6 +132,7 @@ impl Default for Settings {
             theme: Theme::Dark,
             monitor: String::new(),
             side: Side::Right,
+            language: Language::Auto,
             colors: Colors::default(),
         }
     }
@@ -143,28 +157,28 @@ fn is_hex_color(s: &str) -> bool {
 impl Settings {
     pub fn validate(&self) -> Result<(), Vec<FieldError>> {
         let mut errs = Vec::new();
-        let mut err = |field: &'static str, message: &str| {
-            errs.push(FieldError { field, message: message.into() })
+        let mut err = |field: &'static str, pt: &str, en: &str| {
+            errs.push(FieldError { field, message: tr(pt, en).into() })
         };
         if !(self.quota_usd.is_finite() && self.quota_usd > 0.0) {
-            err("quotaUsd", "A cota precisa ser maior que zero.");
+            err("quotaUsd", "A cota precisa ser maior que zero.", "The quota must be greater than zero.");
         }
         if !(self.window_hours.is_finite() && self.window_hours >= 0.5 && self.window_hours <= 24.0) {
-            err("windowHours", "A janela precisa estar entre 0,5 e 24 horas.");
+            err("windowHours", "A janela precisa estar entre 0,5 e 24 horas.", "The window must be between 0.5 and 24 hours.");
         }
         if !(self.low_max.is_finite() && self.low_max > 0.0) {
-            err("lowMax", "Baixo precisa ser maior que zero.");
+            err("lowMax", "Baixo precisa ser maior que zero.", "Low must be greater than zero.");
         } else if !(self.low_max < self.high_min) {
-            err("lowMax", "Baixo precisa ser menor que Alto.");
+            err("lowMax", "Baixo precisa ser menor que Alto.", "Low must be less than High.");
         }
         if !(self.high_min.is_finite() && self.rate_max.is_finite() && self.high_min < self.rate_max) {
-            err("highMin", "Alto precisa ser menor que o fim da escala.");
+            err("highMin", "Alto precisa ser menor que o fim da escala.", "High must be less than the end of the scale.");
         }
         if !(self.day_max_usd.is_finite() && self.day_max_usd >= 1.0) {
-            err("dayMaxUsd", "A escala diária precisa ser de pelo menos 1.");
+            err("dayMaxUsd", "A escala diária precisa ser de pelo menos 1.", "The daily scale must be at least 1.");
         }
         if !(self.poll_seconds.is_finite() && self.poll_seconds >= 10.0 && self.poll_seconds <= 3600.0) {
-            err("pollSeconds", "O intervalo precisa estar entre 10 e 3600 segundos.");
+            err("pollSeconds", "O intervalo precisa estar entre 10 e 3600 segundos.", "The interval must be between 10 and 3600 seconds.");
         }
         for (field, value) in [
             ("colors.accent", &self.colors.accent),
@@ -173,7 +187,7 @@ impl Settings {
             ("colors.high", &self.colors.high),
         ] {
             if !is_hex_color(value) {
-                err(field, "Cor inválida (use #rrggbb).");
+                err(field, "Cor inválida (use #rrggbb).", "Invalid color (use #rrggbb).");
             }
         }
         if errs.is_empty() {
@@ -240,6 +254,11 @@ pub fn parse(text: &str) -> Settings {
         theme,
         monitor: v["monitor"].as_str().unwrap_or("").to_string(),
         side: if v["side"].as_str() == Some("left") { Side::Left } else { Side::Right },
+        language: match v["language"].as_str() {
+            Some("en") => Language::En,
+            Some("pt") => Language::Pt,
+            _ => Language::Auto,
+        },
         quota_usd: num("quotaUsd", d.quota_usd),
         window_hours: num("windowHours", d.window_hours),
         rate_max: num("rateMax", d.rate_max),
@@ -292,7 +311,7 @@ pub fn load_or_init(path: Option<&Path>) -> Settings {
 }
 
 pub fn save(path: &Path, s: &Settings) -> Result<(), String> {
-    let fail = |e: std::io::Error| format!("Falha ao gravar as configurações: {e}");
+    let fail = |e: std::io::Error| format!("{}: {e}", tr("Falha ao gravar as configurações", "Could not save the settings"));
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(fail)?;
     }
@@ -432,6 +451,15 @@ mod tests {
         assert_eq!(parse("{}").source, Source::Auto);
         let json = serde_json::to_value(Settings { source: Source::Claude, ..Default::default() }).unwrap();
         assert_eq!(json["source"], "claude");
+    }
+
+    #[test]
+    fn parse_language() {
+        assert_eq!(parse(r#"{"language":"en"}"#).language, Language::En);
+        assert_eq!(parse(r#"{"language":"pt"}"#).language, Language::Pt);
+        assert_eq!(parse(r#"{"language":"fr"}"#).language, Language::Auto);
+        let json = serde_json::to_value(Settings { language: Language::Pt, ..Default::default() }).unwrap();
+        assert_eq!(json["language"], "pt");
     }
 
     #[test]

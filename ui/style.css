@@ -201,7 +201,7 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .hint strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: -.3px; }
 .hint p { margin-top: 8px; font-size: 11.5px; line-height: 1.5; color: var(--g5); }
 .hint code { color: var(--orange); font-family: inherit; font-weight: 600; }
-.hint span { font-size: 10.5px; color: var(--g4); }
+.hint .path { font-size: 10.5px; color: var(--g4); }
 
 /* estado sem cookie: esconde os dados e centraliza o formulário */
 [data-state="auth"] .gauge-wrap,

@@ -4,9 +4,11 @@ mod alerts;
 mod claude;
 mod codex;
 mod config;
+mod i18n;
 mod settings;
 mod usage;
 
+use i18n::tr;
 use settings::{SaveError, Settings, Source};
 use std::{
     path::PathBuf,
@@ -36,6 +38,7 @@ struct AppState {
     /// Painel aberto (hover) e altura pedida pela interface, para reposicionar ao salvar as configurações.
     expanded: Mutex<bool>,
     panel_height: Mutex<f64>,
+    tray: Mutex<Option<TrayItems>>,
     /// Cache do gasto (centavos) de dias já encerrados, por data (AAAA-MM-DD).
     days: Mutex<std::collections::HashMap<String, f64>>,
     notify: Notify,
@@ -45,6 +48,7 @@ impl AppState {
     fn new() -> Self {
         let settings_path = settings::default_path();
         let settings = settings::load_or_init(settings_path.as_deref());
+        i18n::set(settings.language);
         AppState {
             snapshot: Mutex::new(Snapshot::empty("loading", None, &settings)),
             settings: Mutex::new(settings),
@@ -52,6 +56,7 @@ impl AppState {
             team: Mutex::new(None),
             expanded: Mutex::new(false),
             panel_height: Mutex::new(EXPANDED.1),
+            tray: Mutex::new(None),
             days: Mutex::new(Default::default()),
             notify: Notify::new(),
         }
@@ -146,7 +151,8 @@ async fn fetch_source(client: &reqwest::Client, state: &AppState, settings: &Set
     let result = match source {
         Source::Cursor => {
             let Some(cookie) = config::load_cookie() else {
-                return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
+                let msg = tr("Cole o cookie WorkosCursorSessionToken", "Paste the WorkosCursorSessionToken cookie");
+                return Snapshot::empty("auth", Some(msg.into()), &settings);
             };
             let mut team = *state.team.lock().unwrap();
             let mut days = std::mem::take(&mut *state.days.lock().unwrap());
@@ -162,7 +168,7 @@ async fn fetch_source(client: &reqwest::Client, state: &AppState, settings: &Set
         Ok(s) => s,
         Err(FetchError::Auth) => Snapshot::empty(
             "auth",
-            Some("Sessão expirada: cole o cookie novamente".into()),
+            Some(tr("Sessão expirada: cole o cookie novamente", "Session expired: paste the cookie again").into()),
             &settings,
         ),
         Err(FetchError::Other(msg)) => {
@@ -231,7 +237,7 @@ fn refresh_now(state: State<'_, Arc<AppState>>) {
 
 #[tauri::command]
 fn set_cookie(cookie: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    let normalized = config::normalize(&cookie).ok_or("Cookie vazio")?;
+    let normalized = config::normalize(&cookie).ok_or(tr("Cookie vazio", "Empty cookie"))?;
     config::save_cookie(&normalized)?;
     *state.team.lock().unwrap() = None;
     state.notify.notify_one();
@@ -252,7 +258,11 @@ fn set_expanded(window: WebviewWindow, expanded: bool, height: Option<f64>, stat
 #[serde(rename_all = "camelCase")]
 struct MonitorInfo {
     name: String,
-    label: String,
+    /// Posição da esquerda para a direita (1, 2, …); o rótulo é montado na interface, no idioma dela.
+    number: usize,
+    width: u32,
+    height: u32,
+    primary: bool,
 }
 
 /// Monitores conectados, da esquerda para a direita, para o seletor das configurações.
@@ -267,8 +277,13 @@ fn list_monitors(app: tauri::AppHandle) -> Vec<MonitorInfo> {
         .filter_map(|(i, m)| {
             let name = m.name()?.clone();
             let s = m.size();
-            let main = if primary.as_ref() == Some(&name) { " · principal" } else { "" };
-            Some(MonitorInfo { label: format!("Monitor {} · {}×{}{main}", i + 1, s.width, s.height), name })
+            Some(MonitorInfo {
+                number: i + 1,
+                width: s.width,
+                height: s.height,
+                primary: primary.as_ref() == Some(&name),
+                name,
+            })
         })
         .collect()
 }
@@ -276,6 +291,22 @@ fn list_monitors(app: tauri::AppHandle) -> Vec<MonitorInfo> {
 #[tauri::command]
 fn get_settings(state: State<'_, Arc<AppState>>) -> Settings {
     state.settings.lock().unwrap().clone()
+}
+
+/// Idioma resolvido ("en" ou "pt") para a interface.
+#[tauri::command]
+fn get_lang() -> &'static str {
+    i18n::code()
+}
+
+/// Para a prévia nas configurações: em qual idioma uma opção (inclusive "auto") resultaria.
+#[tauri::command]
+fn resolve_lang(language: settings::Language) -> &'static str {
+    if i18n::resolve(language) == settings::Language::Pt {
+        "pt"
+    } else {
+        "en"
+    }
 }
 
 #[tauri::command]
@@ -294,21 +325,61 @@ fn save_settings(
     settings: Settings,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Settings, SaveError> {
-    if let Err(fields) = settings.validate() {
-        return Err(SaveError { message: "Corrija os campos destacados.".into(), fields });
+    // Mensagens de erro já no idioma escolhido; se não salvar, volta ao anterior.
+    let previous = state.settings.lock().unwrap().language;
+    i18n::set(settings.language);
+    let result = (|| {
+        if let Err(fields) = settings.validate() {
+            return Err(SaveError { message: tr("Corrija os campos destacados.", "Fix the highlighted fields.").into(), fields });
+        }
+        let path = state.settings_path.as_ref().ok_or_else(|| SaveError {
+            message: tr("Pasta de configurações (APPDATA) não encontrada.", "Settings folder (APPDATA) not found.").into(),
+            fields: Vec::new(),
+        })?;
+        settings::save(path, &settings).map_err(|message| SaveError { message, fields: Vec::new() })
+    })();
+    if let Err(e) = result {
+        i18n::set(previous);
+        return Err(e);
     }
-    let path = state.settings_path.as_ref().ok_or_else(|| SaveError {
-        message: "Pasta de configurações (APPDATA) não encontrada.".into(),
-        fields: Vec::new(),
-    })?;
-    settings::save(path, &settings).map_err(|message| SaveError { message, fields: Vec::new() })?;
     *state.settings.lock().unwrap() = settings.clone();
+    relabel_tray(&state);
     if let Some(w) = app.get_webview_window("main") {
         place(&w, *state.expanded.lock().unwrap(), *state.panel_height.lock().unwrap(), &settings);
     }
     let _ = app.emit("settings", &settings);
     state.notify.notify_one();
     Ok(settings)
+}
+
+/// Itens do menu da bandeja, guardados para trocar o texto quando o idioma muda.
+struct TrayItems {
+    refresh: MenuItem<tauri::Wry>,
+    settings: MenuItem<tauri::Wry>,
+    toggle: MenuItem<tauri::Wry>,
+    autostart: CheckMenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
+
+fn tray_labels() -> [&'static str; 5] {
+    [
+        tr("Atualizar agora", "Refresh now"),
+        tr("Configurações…", "Settings…"),
+        tr("Mostrar/ocultar", "Show/hide"),
+        tr("Iniciar com o Windows", "Start with Windows"),
+        tr("Sair", "Quit"),
+    ]
+}
+
+fn relabel_tray(state: &AppState) {
+    if let Some(t) = state.tray.lock().unwrap().as_ref() {
+        let l = tray_labels();
+        let _ = t.refresh.set_text(l[0]);
+        let _ = t.settings.set_text(l[1]);
+        let _ = t.toggle.set_text(l[2]);
+        let _ = t.autostart.set_text(l[3]);
+        let _ = t.quit.set_text(l[4]);
+    }
 }
 
 /// Abre a janela de configurações ou a traz para a frente se já estiver aberta.
@@ -320,7 +391,7 @@ fn show_settings(app: &tauri::AppHandle) {
         return;
     }
     let _ = tauri::WebviewWindowBuilder::new(app, "settings", tauri::WebviewUrl::App("settings.html".into()))
-        .title("Configurações · Cursor Usage")
+        .title(tr("Configurações · Cursor Usage", "Settings · Cursor Usage"))
         .inner_size(420.0, 640.0)
         .resizable(false)
         .maximizable(false)
@@ -369,6 +440,8 @@ fn main() {
             set_expanded,
             get_settings,
             get_sources,
+            get_lang,
+            resolve_lang,
             list_monitors,
             default_settings,
             save_settings,
@@ -380,19 +453,15 @@ fn main() {
             let win = app.get_webview_window("main").expect("janela main");
             place(&win, false, EXPANDED.1, &state.settings.lock().unwrap());
 
-            let refresh = MenuItem::with_id(app, "refresh", "Atualizar agora", true, None::<&str>)?;
-            let open_cfg = MenuItem::with_id(app, "settings", "Configurações…", true, None::<&str>)?;
-            let toggle = MenuItem::with_id(app, "toggle", "Mostrar/ocultar", true, None::<&str>)?;
-            let auto = CheckMenuItem::with_id(
-                app,
-                "autostart",
-                "Iniciar com o Windows",
-                true,
-                autostart_enabled(),
-                None::<&str>,
-            )?;
-            let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
+            let l = tray_labels();
+            let refresh = MenuItem::with_id(app, "refresh", l[0], true, None::<&str>)?;
+            let open_cfg = MenuItem::with_id(app, "settings", l[1], true, None::<&str>)?;
+            let toggle = MenuItem::with_id(app, "toggle", l[2], true, None::<&str>)?;
+            let auto = CheckMenuItem::with_id(app, "autostart", l[3], true, autostart_enabled(), None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", l[4], true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&refresh, &open_cfg, &toggle, &auto, &quit])?;
+            *state.tray.lock().unwrap() =
+                Some(TrayItems { refresh: refresh.clone(), settings: open_cfg.clone(), toggle: toggle.clone(), autostart: auto.clone(), quit: quit.clone() });
             let st = state.clone();
             let auto_item = auto.clone();
             TrayIconBuilder::new()
@@ -429,8 +498,8 @@ fn main() {
             if std::env::args().any(|a| a == "--test-notify") {
                 alerts::notify(
                     app.handle(),
-                    "Cursor Usage: teste",
-                    "As notificações do widget estão funcionando.",
+                    tr("Cursor Usage: teste", "Cursor Usage: test"),
+                    tr("As notificações do widget estão funcionando.", "Widget notifications are working."),
                 );
             }
 

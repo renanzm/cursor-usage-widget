@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -13,18 +13,18 @@
       <span class="dot"></span>
       <span id="tab-src" class="tab-src"></span>
       <span id="tab-amount" class="tab-amount">--</span>
-      <span id="tab-label" class="tab-label">ciclo</span>
+      <span id="tab-label" class="tab-label"></span>
       <span class="tab-bar"><i id="tab-fill"></i></span>
     </section>
 
     <!-- Painel expandido -->
     <section class="panel">
       <header class="row r1">
-        <span class="eyebrow">Ritmo · <span id="window-label">3h</span></span>
+        <span class="eyebrow"><span data-i18n="pace">Pace</span> · <span id="window-label">3h</span></span>
         <span class="head-right">
           <span id="source-badge" class="source-badge" hidden></span>
           <span id="clock" class="clock"></span>
-          <button id="open-settings" class="gear" type="button" title="Configurações" aria-label="Configurações">
+          <button id="open-settings" class="gear" type="button" data-i18n-title="settings" data-i18n-aria="settings">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
@@ -64,7 +64,7 @@
         <div class="rate"><strong id="rate">--</strong><small>/h</small></div>
         <div class="rate-sub">
           <span id="level-chip" class="chip">--</span>
-          <span class="muted">últimas <span id="window-hours">3h</span></span> <b id="window">--</b>
+          <span class="muted"><span data-i18n="last">last</span> <span id="window-hours">3h</span></span> <b id="window">--</b>
         </div>
       </div>
 
@@ -72,12 +72,12 @@
 
       <div id="limits" class="limits row r4">
         <div class="lim">
-          <div class="lim-head"><span id="lim5-label" class="eyebrow">Sessão · 5h</span><span id="lim5-pct" class="pct">--</span></div>
+          <div class="lim-head"><span id="lim5-label" class="eyebrow"></span><span id="lim5-pct" class="pct">--</span></div>
           <div class="bar"><i id="lim5-fill"></i></div>
           <div id="lim5-reset" class="lim-sub"></div>
         </div>
         <div class="lim">
-          <div class="lim-head"><span id="lim7-label" class="eyebrow">Semana</span><span id="lim7-pct" class="pct">--</span></div>
+          <div class="lim-head"><span id="lim7-label" class="eyebrow"></span><span id="lim7-pct" class="pct">--</span></div>
           <div class="bar"><i id="lim7-fill"></i></div>
           <div id="lim7-reset" class="lim-sub"></div>
         </div>
@@ -88,7 +88,7 @@
 
       <div class="cycle row r5">
         <div class="cycle-head">
-          <span class="eyebrow">Ciclo mensal</span>
+          <span class="eyebrow" data-i18n="monthlyCycle">Monthly cycle</span>
           <span id="cycle-pct" class="pct">--</span>
         </div>
         <div class="cycle-amount"><b id="cycle-used">--</b><span id="cycle-limit" class="muted"></span></div>
@@ -98,24 +98,25 @@
 
       <div class="week row r6">
         <div class="week-head">
-          <span class="eyebrow">Semana · seg–sex</span>
+          <span class="eyebrow" data-i18n="weekDays">Week · Mon–Fri</span>
           <span id="week-total" class="muted small"></span>
         </div>
         <div id="eq" class="eq"></div>
       </div>
 
       <div class="hint">
-        <strong>Conectar ao Cursor</strong>
-        <p>Cole o cookie <code>WorkosCursorSessionToken</code><br />
-        <span>cursor.com › F12 › Application › Cookies</span></p>
+        <strong data-i18n="connectCursor">Connect to Cursor</strong>
+        <p><span data-i18n-html="pasteCookie"></span><br />
+        <span class="path">cursor.com › F12 › Application › Cookies</span></p>
       </div>
       <div id="msg" class="msg" hidden></div>
       <form id="cookie-form" class="cookie" hidden>
-        <input id="cookie-input" type="password" placeholder="Cole o cookie aqui" autocomplete="off" spellcheck="false" />
-        <button type="submit">Salvar</button>
+        <input id="cookie-input" type="password" data-i18n-placeholder="cookiePlaceholder" autocomplete="off" spellcheck="false" />
+        <button type="submit" data-i18n="save">Save</button>
       </form>
     </section>
   </main>
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

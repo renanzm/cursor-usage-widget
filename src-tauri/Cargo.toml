@@ -17,6 +17,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "sync", "macros"] }
 reqwest = { version = "0.12", features = ["json"] }
 ruzstd = "0.8"
+sys-locale = "0.3"
 keyring ={ version = "3", features = ["windows-native"] }
 
 [profile.release]

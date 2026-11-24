@@ -91,5 +91,5 @@ pub fn load_cookie() -> Option<String> {
 pub fn save_cookie(cookie: &str) -> Result<(), String> {
     keyring::Entry::new(SERVICE, ACCOUNT)
         .and_then(|e| e.set_password(cookie))
-        .map_err(|e| format!("Falha ao salvar no Credential Manager: {e}"))
+        .map_err(|e| format!("{}: {e}", crate::i18n::tr("Falha ao salvar no Credential Manager", "Could not save to Credential Manager")))
 }

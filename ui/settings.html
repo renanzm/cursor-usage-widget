@@ -1,19 +1,19 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Configurações · Cursor Usage</title>
+  <title data-i18n="settingsTitle">Settings · Cursor Usage</title>
   <link rel="stylesheet" href="settings.css" />
 </head>
 <body>
   <form id="form" novalidate>
-    <h1>Configurações</h1>
+    <h1 data-i18n="settings">Settings</h1>
 
     <fieldset>
-      <legend>Fonte de dados</legend>
+      <legend data-i18n="dataSource">Data source</legend>
       <div class="source-list">
-        <label><input type="radio" name="source" value="auto" /> Automático <small data-src-note="auto"></small></label>
+        <label><input type="radio" name="source" value="auto" /> <span data-i18n="automatic">Automatic</span> <small data-src-note="auto"></small></label>
         <label><input type="radio" name="source" value="claude" /> Claude Code <small data-src-note="claude"></small></label>
         <label><input type="radio" name="source" value="codex" /> Codex <small data-src-note="codex"></small></label>
         <label><input type="radio" name="source" value="cursor" /> Cursor <small data-src-note="cursor"></small></label>
@@ -21,116 +21,129 @@
     </fieldset>
 
     <fieldset>
-      <legend>Cota mensal</legend>
+      <legend data-i18n="language">Language</legend>
+      <label class="field wide">
+        <span data-i18n="language">Language</span>
+        <select name="language">
+          <option value="auto" data-i18n="langAuto">Automatic (Windows)</option>
+          <option value="en">English</option>
+          <option value="pt">Português</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend data-i18n="monthlyQuota">Monthly quota</legend>
       <div class="seg-toggle">
-        <label><input type="radio" name="quotaMode" value="auto" /> Automático (do Cursor)</label>
-        <label><input type="radio" name="quotaMode" value="manual" /> Manual</label>
+        <label><input type="radio" name="quotaMode" value="auto" /> <span data-i18n="quotaAuto">Automatic (from Cursor)</span></label>
+        <label><input type="radio" name="quotaMode" value="manual" /> <span data-i18n="manual">Manual</span></label>
       </div>
       <label class="field" data-field="quotaUsd">
-        <span>Valor da cota (US$)</span>
+        <span data-i18n="quotaValue">Quota amount (USD)</span>
         <input name="quotaUsd" type="number" step="any" min="0" />
         <small class="err"></small>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>Ritmo</legend>
+      <legend data-i18n="pace">Pace</legend>
       <label class="field" data-field="windowHours">
-        <span>Janela de cálculo (horas)</span>
+        <span data-i18n="windowHours">Calculation window (hours)</span>
         <input name="windowHours" type="number" step="0.5" min="0.5" max="24" />
         <small class="err"></small>
       </label>
       <label class="field" data-field="rateMax">
-        <span>Fim da escala do velocímetro (US$/h)</span>
+        <span data-i18n="rateMax">Speedometer end of scale (USD/h)</span>
         <input name="rateMax" type="number" step="any" min="0" />
         <small class="err"></small>
       </label>
       <label class="field" data-field="lowMax">
-        <span>Baixo até (US$/h)</span>
+        <span data-i18n="lowMax">Low up to (USD/h)</span>
         <input name="lowMax" type="number" step="any" min="0" />
         <small class="err"></small>
       </label>
       <label class="field" data-field="highMin">
-        <span>Alto a partir de (US$/h)</span>
+        <span data-i18n="highMin">High from (USD/h)</span>
         <input name="highMin" type="number" step="any" min="0" />
         <small class="err"></small>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>Semana</legend>
+      <legend data-i18n="week">Week</legend>
       <label class="field" data-field="dayMaxUsd">
-        <span>Escala diária do equalizador (US$)</span>
+        <span data-i18n="dayMax">Equalizer daily scale (USD)</span>
         <input name="dayMaxUsd" type="number" step="any" min="1" />
         <small class="err"></small>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>Geral</legend>
+      <legend data-i18n="general">General</legend>
       <label class="field" data-field="pollSeconds">
-        <span>Atualizar a cada (segundos)</span>
+        <span data-i18n="pollSeconds">Refresh every (seconds)</span>
         <input name="pollSeconds" type="number" step="1" min="10" max="3600" />
         <small class="err"></small>
       </label>
     </fieldset>
 
     <fieldset>
-      <legend>Posição</legend>
+      <legend data-i18n="position">Position</legend>
       <label class="field wide">
-        <span>Monitor</span>
-        <select name="monitor"><option value="">Automático (o mais à direita)</option></select>
+        <span data-i18n="monitor">Monitor</span>
+        <select name="monitor"><option value="" data-i18n="monitorAuto">Automatic (rightmost)</option></select>
       </label>
       <div class="seg-toggle">
-        <label><input type="radio" name="side" value="left" /> Lado esquerdo</label>
-        <label><input type="radio" name="side" value="right" /> Lado direito</label>
+        <label><input type="radio" name="side" value="left" /> <span data-i18n="left">Left side</span></label>
+        <label><input type="radio" name="side" value="right" /> <span data-i18n="right">Right side</span></label>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Aparência</legend>
+      <legend data-i18n="appearance">Appearance</legend>
       <div class="seg-toggle">
-        <label><input type="radio" name="theme" value="dark" /> Escuro</label>
-        <label><input type="radio" name="theme" value="light" /> Claro</label>
+        <label><input type="radio" name="theme" value="dark" /> <span data-i18n="dark">Dark</span></label>
+        <label><input type="radio" name="theme" value="light" /> <span data-i18n="light">Light</span></label>
       </div>
     </fieldset>
 
     <fieldset>
-      <legend>Cores</legend>
+      <legend data-i18n="colors">Colors</legend>
       <div class="colors">
         <label class="field" data-field="colors.accent">
-          <span>Destaque</span>
+          <span data-i18n="accent">Accent</span>
           <input name="colors.accent" type="color" />
           <small class="err"></small>
         </label>
         <label class="field" data-field="colors.low">
-          <span>Baixo</span>
+          <span data-i18n="low">Low</span>
           <input name="colors.low" type="color" />
           <small class="err"></small>
         </label>
         <label class="field" data-field="colors.mid">
-          <span>Médio</span>
+          <span data-i18n="mid">Medium</span>
           <input name="colors.mid" type="color" />
           <small class="err"></small>
         </label>
         <label class="field" data-field="colors.high">
-          <span>Alto</span>
+          <span data-i18n="high">High</span>
           <input name="colors.high" type="color" />
           <small class="err"></small>
         </label>
       </div>
-      <button type="button" id="reset-colors" class="link">Restaurar cores padrão</button>
+      <button type="button" id="reset-colors" class="link" data-i18n="resetColors">Restore default colors</button>
     </fieldset>
 
     <p id="form-msg" class="form-msg" hidden></p>
 
     <footer>
-      <button type="button" id="reset-all" class="link">Restaurar tudo</button>
+      <button type="button" id="reset-all" class="link" data-i18n="resetAll">Restore all</button>
       <span class="spacer"></span>
-      <button type="button" id="cancel" class="secondary">Cancelar</button>
-      <button type="submit" class="primary">Salvar</button>
+      <button type="button" id="cancel" class="secondary" data-i18n="cancel">Cancel</button>
+      <button type="submit" class="primary" data-i18n="save">Save</button>
     </footer>
   </form>
+  <script src="i18n.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

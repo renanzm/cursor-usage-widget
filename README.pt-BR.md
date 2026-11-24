@@ -1,4 +1,4 @@
-# Usage Widget — Cursor · Claude Code · Codex
+﻿# Usage Widget — Cursor · Claude Code · Codex
 
 [English](README.md) · **Português**
 
@@ -13,19 +13,19 @@ Funciona com **Claude Code**, **Codex** (OpenAI) e **Cursor**. Você escolhe a f
   </tr>
   <tr>
     <td align="center">
-      <img src="docs/images/widget-closed-dark.png" width="56" alt="Widget fechado, tema escuro" />
+      <img src="docs/images/widget-closed-dark-pt.png" width="56" alt="Widget fechado, tema escuro" />
       &nbsp;&nbsp;
-      <img src="docs/images/widget-open-dark.png" width="272" alt="Widget aberto, tema escuro" />
+      <img src="docs/images/widget-open-dark-pt.png" width="272" alt="Widget aberto, tema escuro" />
     </td>
     <td align="center">
-      <img src="docs/images/widget-closed-light.png" width="56" alt="Widget fechado, tema claro" />
+      <img src="docs/images/widget-closed-light-pt.png" width="56" alt="Widget fechado, tema claro" />
       &nbsp;&nbsp;
-      <img src="docs/images/widget-open-light.png" width="272" alt="Widget aberto, tema claro" />
+      <img src="docs/images/widget-open-light-pt.png" width="272" alt="Widget aberto, tema claro" />
     </td>
   </tr>
 </table>
 
-<sub>As imagens usam dados fictícios (gerados por <code>tools/readme-shots.ps1</code>).</sub>
+<sub>As imagens usam dados fictícios (gerados por <code>tools/readme-shots.ps1</code>). A interface está disponível em inglês e português.</sub>
 
 ## O que ele mostra
 
@@ -85,6 +85,7 @@ O script compila em release, instala em `%LOCALAPPDATA%\CursorUsageWidget`, conf
 | Seção | O que dá para ajustar |
 |---|---|
 | Fonte de dados | Automático, Claude Code, Codex ou Cursor |
+| Idioma | Automático (segue o Windows), English ou Português |
 | Cota mensal | Automática (do Cursor) ou um valor manual em US$ |
 | Ritmo | Janela de cálculo, fim da escala e limites de baixo e alto |
 | Semana | Escala diária do equalizador |

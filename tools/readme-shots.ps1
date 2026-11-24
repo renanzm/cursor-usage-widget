@@ -33,7 +33,7 @@ $mock = @'
   const settings = { theme: q.get("theme") || "dark", side: "right",
     colors: { accent: "#ff9f0a", low: "#30d158", mid: "#ffd60a", high: "#ff453a" } };
   window.__TAURI__ = {
-    core: { invoke: async (cmd) => ({ get_snapshot: snap, get_settings: settings })[cmd] },
+    core: { invoke: async (cmd) => ({ get_snapshot: snap, get_settings: settings, get_lang: q.get("lang") || "en" })[cmd] },
     event: { listen: async () => {} },
   };
   if (q.get("open")) addEventListener("load", () => setTimeout(() => document.getElementById("w").classList.add("expanded"), 50));
@@ -50,16 +50,19 @@ $index = Join-Path $tmp "index.html"
 Add-Type -AssemblyName System.Drawing
 $scale = 2
 $url = ([Uri]$index).AbsoluteUri
+# Inglês para o README.md, português para o README.pt-BR.md (sufixo -pt).
+foreach ($lang in "en", "pt") {
 foreach ($theme in "dark", "light") {
   foreach ($shot in @(@{ name = "closed"; w = 56; h = 128; q = "" }, @{ name = "open"; w = 272; h = 620; q = "&open=1" })) {
-    $file = Join-Path $out "widget-$($shot.name)-$theme.png"
+    $suffix = if ($lang -eq "pt") { "-pt" } else { "" }
+    $file = Join-Path $out "widget-$($shot.name)-$theme$suffix.png"
     $raw = Join-Path $tmp "raw.png"
     # O navegador escreve progresso no stderr: Start-Process evita que o PowerShell trate isso como erro.
     Start-Process -FilePath $browser -Wait -WindowStyle Hidden -ArgumentList @(
       "--headless=new", "--disable-gpu", "--hide-scrollbars", "--force-device-scale-factor=$scale",
       "--default-background-color=00000000", "--virtual-time-budget=3000",
       "--window-size=800,800", "--screenshot=`"$raw`"",
-      "`"$url`?theme=$theme&size=$($shot.w),$($shot.h)$($shot.q)`""
+      "`"$url`?lang=$lang&theme=$theme&size=$($shot.w),$($shot.h)$($shot.q)`""
     )
     $img = [Drawing.Bitmap]::FromFile($raw)
     $crop = $img.Clone([Drawing.Rectangle]::new(0, 0, $shot.w * $scale, $shot.h * $scale), $img.PixelFormat)
@@ -68,4 +71,5 @@ foreach ($theme in "dark", "light") {
     $crop.Dispose()
     Write-Host "ok  $file"
   }
+}
 }

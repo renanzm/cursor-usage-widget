@@ -129,11 +129,11 @@ async fn call(
     let resp = req.send().await.map_err(|e| FetchError::Other(e.to_string()))?;
     match resp.status() {
         StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Err(FetchError::Auth),
-        s if !s.is_success() => Err(FetchError::Other(format!("HTTP {s} em {path}"))),
+        s if !s.is_success() => Err(FetchError::Other(format!("HTTP {s} {} {path}", crate::i18n::tr("em", "at")))),
         _ => resp
             .json::<Value>()
             .await
-            .map_err(|e| FetchError::Other(format!("JSON inválido em {path}: {e}"))),
+            .map_err(|e| FetchError::Other(format!("{} {path}: {e}", crate::i18n::tr("JSON inválido em", "Invalid JSON at")))),
     }
 }
 

@@ -136,7 +136,8 @@ fn collect(dir: &Path, min: SystemTime, out: &mut Vec<(PathBuf, SystemTime, u64)
 
 fn window_label(minutes: f64) -> String {
     match minutes.round() as i64 {
-        10080 => "Semana".into(),
+        // "week" é traduzido pela interface.
+        10080 => "week".into(),
         m if m < 1440 => format!("{}h", (m as f64 / 60.0).round()),
         m => format!("{}d", (m as f64 / 1440.0).round()),
     }
@@ -177,7 +178,7 @@ fn compute(settings: &Settings) -> Result<Snapshot, String> {
     let root = home_dir();
     let sessions = root.join("sessions");
     if !sessions.is_dir() {
-        return Err(format!("Pasta não encontrada: {}", sessions.display()));
+        return Err(format!("{}: {}", crate::i18n::tr("Pasta não encontrada", "Folder not found"), sessions.display()));
     }
     let from = period_start_ms();
     let mut all = Vec::new();
@@ -250,7 +251,7 @@ mod tests {
         assert_eq!(s.limit_5h_label.as_deref(), Some("5h"));
         assert_eq!(s.limit_7d_pct, Some(12.5));
         assert_eq!(s.limit_7d_resets_ms, Some(at + 60_000));
-        assert_eq!(s.limit_7d_label.as_deref(), Some("Semana"));
+        assert_eq!(s.limit_7d_label.as_deref(), Some("week"));
     }
 
     /// `CODEX_LOG=<arquivo .jsonl.zst> cargo test real_log -- --ignored --nocapture`

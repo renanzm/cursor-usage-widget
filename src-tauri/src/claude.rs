@@ -209,7 +209,7 @@ pub fn summarize(events: impl Iterator<Item = (i64, f64)>, settings: &Settings) 
 fn compute(settings: &Settings) -> Result<Snapshot, String> {
     let root = root_dir();
     if !root.is_dir() {
-        return Err(format!("Pasta não encontrada: {}", root.display()));
+        return Err(format!("{}: {}", crate::i18n::tr("Pasta não encontrada", "Folder not found"), root.display()));
     }
     let from = period_start_ms();
     let min_mtime = min_mtime();

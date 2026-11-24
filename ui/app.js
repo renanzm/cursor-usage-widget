@@ -3,13 +3,14 @@ const { listen } = window.__TAURI__.event;
 
 const $ = (id) => document.getElementById(id);
 const root = $("w");
+const { t } = I18N;
 const usd = (v, d = 2) =>
   v
-    .toLocaleString("pt-BR", { style: "currency", currency: "USD", minimumFractionDigits: d, maximumFractionDigits: d })
+    .toLocaleString(I18N.locale, { style: "currency", currency: "USD", minimumFractionDigits: d, maximumFractionDigits: d })
     .replace("US$", "US$ ")
     .replace(/\s+/g, " ");
-const LEVEL_LABEL = { low: "Baixo", mid: "Médio", high: "Alto" };
-const hoursLabel = (h) => (Number.isInteger(h) ? String(h) : h.toFixed(1).replace(".", ",")) + "h";
+const num = (v, d) => v.toLocaleString(I18N.locale, { minimumFractionDigits: d, maximumFractionDigits: d });
+const hoursLabel = (h) => (Number.isInteger(h) ? String(h) : num(h, 1)) + "h";
 
 function applyColors(c) {
   const st = document.documentElement.style;
@@ -38,8 +39,7 @@ function drawTicks(lowMax, highMin, max) {
 
 // ---------- equalizador semanal (seg–sex) ----------
 const SEGMENTS = 10;
-const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex"];
-const eqCols = DAY_LABELS.map((label) => {
+const eqCols = [0, 1, 2, 3, 4].map(() => {
   const col = document.createElement("div");
   col.className = "col future";
   const stack = document.createElement("div");
@@ -55,19 +55,20 @@ const eqCols = DAY_LABELS.map((label) => {
   }
   const lbl = document.createElement("span");
   lbl.className = "lbl";
-  lbl.textContent = label;
   const val = document.createElement("span");
   val.className = "val";
   col.append(stack, lbl, val);
   $("eq").appendChild(col);
-  return { col, segs, val };
+  return { col, segs, val, lbl };
 });
 
 function renderWeek(s) {
   const week = s.week_usd ?? s.weekUsd ?? [];
   const max = s.dayMaxUsd || 100;
   let total = 0;
-  eqCols.forEach(({ col, segs, val }, i) => {
+  const days = t("days");
+  eqCols.forEach(({ col, segs, val, lbl }, i) => {
+    lbl.textContent = days[i];
     const v = week[i];
     const has = typeof v === "number";
     if (has) total += v;
@@ -85,10 +86,10 @@ function renderWeek(s) {
 // ---------- limites do plano Claude (5h + semana) ----------
 function fmtReset(ms) {
   const d = ms - Date.now();
-  if (d <= 0) return "janela já resetou";
+  if (d <= 0) return t("resetDone");
   const h = Math.floor(d / 3600000), m = Math.floor((d % 3600000) / 60000);
   const rel = h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h ? `${h}h ${m}min` : `${m}min`;
-  return "reseta em " + rel;
+  return t("resetsIn", { t: rel });
 }
 // Depois do reset a leitura antiga não vale mais: `null` até o Claude Code gravar de novo.
 const validLimit = (pct, resets) =>
@@ -96,13 +97,14 @@ const validLimit = (pct, resets) =>
 
 const SOURCE_LABEL = { claude: "Claude Code", codex: "Codex", cursor: "Cursor" };
 const shortLabel = (s) => s.limit5hLabel ?? "5h";
-const longLabel = (s) => s.limit7dLabel ?? "Semana";
+// Janela longa: "week" (padrão) ou um período como "30d" no Codex.
+const longIsWeek = (s) => !s.limit7dLabel || s.limit7dLabel === "week";
 
 // Plano por assinatura (Claude Pro/Max, ChatGPT/Codex): o limite mais apertado entre a janela curta e a longa.
 function tightestLimit(s) {
   const opts = [
     { label: shortLabel(s), pct: validLimit(s.limit5hPct, s.limit5hResetsMs) },
-    { label: longLabel(s).toLowerCase(), pct: validLimit(s.limit7dPct, s.limit7dResetsMs) },
+    { label: longIsWeek(s) ? t("tabWeek") : s.limit7dLabel, pct: validLimit(s.limit7dPct, s.limit7dResetsMs) },
   ].filter((o) => o.pct !== null);
   return opts.length ? opts.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
 }
@@ -125,8 +127,8 @@ function renderLimits(s) {
   $("lim-divider").hidden = !show;
   if (!show) return;
   const app = SOURCE_LABEL[s.source] ?? "Claude Code";
-  $("lim5-label").textContent = "Sessão · " + shortLabel(s);
-  $("lim7-label").textContent = longLabel(s) === "Semana" ? "Semana" : "Período · " + longLabel(s);
+  $("lim5-label").textContent = t("session") + " · " + shortLabel(s);
+  $("lim7-label").textContent = longIsWeek(s) ? t("week") : t("period") + " · " + s.limit7dLabel;
   renderLimit("5", s.limit5hPct, s.limit5hResetsMs);
   renderLimit("7", s.limit7dPct, s.limit7dResetsMs);
   // O plano do Codex pode ter uma janela só: esconde a outra quando já há leitura.
@@ -137,10 +139,10 @@ function renderLimits(s) {
   if (s.limitsUpdatedMs) {
     const min = Math.floor((Date.now() - s.limitsUpdatedMs) / 60000);
     note.hidden = min < 10;
-    note.textContent = `Última leitura há ${min < 60 ? min + " min" : Math.floor(min / 60) + " h"} (atualiza com o ${app} aberto)`;
+    note.textContent = t("lastRead", { t: min < 60 ? min + " min" : Math.floor(min / 60) + " h", app });
   } else {
     note.hidden = false;
-    note.textContent = `Aguardando o ${app} (abra uma sessão e envie uma mensagem)`;
+    note.textContent = t("waiting", { app });
   }
 }
 
@@ -170,7 +172,7 @@ function render(s) {
       lim.pct >= 90 ? "var(--lvl-high)" : lim.pct >= 75 ? "var(--lvl-mid)" : "var(--lvl-low)";
   } else {
     $("tab-amount").textContent = s.status === "auth" ? "!" : "$" + Math.round(s.cycleUsedUsd);
-    $("tab-label").textContent = "ciclo";
+    $("tab-label").textContent = t("tabCycle");
     $("tab-fill").style.height = Math.min(pct, 100) + "%";
     $("tab-fill").style.background = "";
   }
@@ -180,7 +182,7 @@ function render(s) {
   badge.textContent = SOURCE_LABEL[s.source] ?? "";
   $("tab-src").textContent = SOURCE_LABEL[s.source]?.split(" ")[0] ?? "";
   root.dataset.source = s.source ?? "";
-  root.title = SOURCE_LABEL[s.source] ? "Fonte: " + SOURCE_LABEL[s.source] : "";
+  root.title = SOURCE_LABEL[s.source] ? t("sourceTitle", { s: SOURCE_LABEL[s.source] }) : "";
 
   const wh = hoursLabel(s.windowHours ?? 3);
   $("window-label").textContent = wh;
@@ -194,13 +196,13 @@ function render(s) {
   $("fill-glow").style.strokeDasharray = dash;
   $("needle").style.transform = `rotate(${f * 180 - 90}deg)`;
   $("rate").textContent = usd(s.ratePerHour);
-  $("level-chip").textContent = LEVEL_LABEL[s.level];
+  $("level-chip").textContent = t("levels")[s.level] ?? "--";
   $("window").textContent = usd(s.windowUsd);
 
   // ciclo
   $("cycle-used").textContent = usd(s.cycleUsedUsd);
-  $("cycle-limit").textContent = "de " + usd(s.cycleLimitUsd, 0);
-  $("cycle-pct").textContent = pct.toFixed(1).replace(".", ",") + "%";
+  $("cycle-limit").textContent = t("of", { v: usd(s.cycleLimitUsd, 0) });
+  $("cycle-pct").textContent = num(pct, 1) + "%";
   $("cycle-fill").style.width = Math.min(pct, 100) + "%";
 
   renderWeek(s);
@@ -216,20 +218,20 @@ function render(s) {
     if (frac > 0.02 && s.cycleUsedUsd > 0) {
       const p = s.cycleUsedUsd / frac;
       const days = Math.max(0, Math.ceil((t1 - now) / 86400000));
-      proj.textContent = `Projeção ${usd(p, 0)} · ${days}d restantes`;
+      proj.textContent = t("projection", { v: usd(p, 0), d: days });
       if (p > s.cycleLimitUsd) proj.classList.add("warn");
     }
   }
 
   // mensagens / cookie
   // No estado "auth" a instrução já explica o que fazer; só mostra a mensagem se a sessão expirou.
-  const showMsg = s.message && (s.status === "error" || (s.status === "auth" && s.message.includes("expirada")));
+  const showMsg = s.message && (s.status === "error" || (s.status === "auth" && /expir/i.test(s.message)));
   $("msg").hidden = !showMsg;
   $("msg").textContent = s.message ?? "";
   $("cookie-form").hidden = s.status !== "auth";
 
-  $("clock").textContent = new Date(s.updatedAtMs).toLocaleTimeString("pt-BR", {
-    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  $("clock").textContent = new Date(s.updatedAtMs).toLocaleTimeString(I18N.locale, {
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", // sem AM/PM: o cabeçalho é estreito
   });
   refit();
 }
@@ -300,12 +302,17 @@ $("cookie-form").addEventListener("submit", async (e) => {
 
 // ---------- inicialização ----------
 listen("usage", (ev) => render(ev.payload));
-const applySettings = (s) => {
+const applySettings = async (s) => {
   applyColors(s.colors);
   document.documentElement.dataset.theme = s.theme ?? "dark";
   root.dataset.side = s.side ?? "right";
+  I18N.set(await invoke("get_lang"));
+  if (snap) render(snap);
 };
 listen("settings", (ev) => applySettings(ev.payload));
-invoke("get_settings").then(applySettings);
-invoke("get_snapshot").then(render);
+// Idioma antes do primeiro desenho, para não piscar no idioma errado.
+invoke("get_settings")
+  .then(applySettings)
+  .then(() => invoke("get_snapshot"))
+  .then(render);
 setInterval(() => snap && render(snap), 60_000);
