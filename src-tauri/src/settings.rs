@@ -48,6 +48,15 @@ impl Source {
     }
 }
 
+/// Borda da tela em que o widget fica encostado.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    Left,
+    #[default]
+    Right,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Colors {
     pub accent: String,
@@ -86,6 +95,12 @@ pub struct Settings {
     /// Tema visual do widget e do painel.
     #[serde(default)]
     pub theme: Theme,
+    /// Nome do monitor (ex.: `\\.\DISPLAY2`); vazio = o monitor mais à direita.
+    #[serde(default)]
+    pub monitor: String,
+    /// Lado do monitor em que o widget fica.
+    #[serde(default)]
+    pub side: Side,
     pub colors: Colors,
 }
 
@@ -102,6 +117,8 @@ impl Default for Settings {
             day_max_usd: 100.0,
             poll_seconds: 30.0,
             theme: Theme::Dark,
+            monitor: String::new(),
+            side: Side::Right,
             colors: Colors::default(),
         }
     }
@@ -221,6 +238,8 @@ pub fn parse(text: &str) -> Settings {
         source: Source::from_str(v["source"].as_str().unwrap_or("")),
         quota_mode,
         theme,
+        monitor: v["monitor"].as_str().unwrap_or("").to_string(),
+        side: if v["side"].as_str() == Some("left") { Side::Left } else { Side::Right },
         quota_usd: num("quotaUsd", d.quota_usd),
         window_hours: num("windowHours", d.window_hours),
         rate_max: num("rateMax", d.rate_max),
@@ -413,6 +432,16 @@ mod tests {
         assert_eq!(parse("{}").source, Source::Auto);
         let json = serde_json::to_value(Settings { source: Source::Claude, ..Default::default() }).unwrap();
         assert_eq!(json["source"], "claude");
+    }
+
+    #[test]
+    fn parse_position() {
+        let s = parse(r#"{"monitor":"\\\\.\\DISPLAY2","side":"left"}"#);
+        assert_eq!((s.monitor.as_str(), s.side), (r"\\.\DISPLAY2", Side::Left));
+        let s = parse(r#"{"side":"top"}"#);
+        assert_eq!((s.monitor.as_str(), s.side), ("", Side::Right));
+        let json = serde_json::to_value(Settings { side: Side::Left, ..Default::default() }).unwrap();
+        assert_eq!(json["side"], "left");
     }
 
     #[test]

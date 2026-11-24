@@ -277,6 +277,7 @@ listen("usage", (ev) => render(ev.payload));
 const applySettings = (s) => {
   applyColors(s.colors);
   document.documentElement.dataset.theme = s.theme ?? "dark";
+  root.dataset.side = s.side ?? "right";
 };
 listen("settings", (ev) => applySettings(ev.payload));
 invoke("get_settings").then(applySettings);

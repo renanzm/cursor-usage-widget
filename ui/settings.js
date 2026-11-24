@@ -32,8 +32,20 @@ function showSources(av) {
   note("auto", "usa " + SOURCE_NAMES[auto]);
 }
 
+function showMonitors(list) {
+  const sel = input("monitor");
+  for (const m of list) sel.add(new Option(m.label, m.name));
+}
+
 function fill(s, { colorsOnly = false } = {}) {
   if (!colorsOnly) {
+    const sel = input("monitor");
+    // Monitor salvo que não está conectado agora: mantém a escolha visível.
+    if (s.monitor && ![...sel.options].some((o) => o.value === s.monitor)) {
+      sel.add(new Option("Desconectado (" + s.monitor.replace(/^\\\\\.\\/, "") + ")", s.monitor));
+    }
+    sel.value = s.monitor ?? "";
+    form.querySelector(`input[name="side"][value="${s.side ?? "right"}"]`).checked = true;
     const radio = form.querySelector(`input[name="source"][value="${s.source ?? "auto"}"]`);
     (radio.disabled ? form.querySelector('input[name="source"][value="auto"]') : radio).checked = true;
     form.querySelector(`input[name="quotaMode"][value="${s.quotaMode}"]`).checked = true;
@@ -46,7 +58,14 @@ function fill(s, { colorsOnly = false } = {}) {
 }
 
 function read() {
-  const s = { source: source(), quotaMode: quotaMode(), theme: theme(), colors: {} };
+  const s = {
+    source: source(),
+    quotaMode: quotaMode(),
+    theme: theme(),
+    monitor: input("monitor").value,
+    side: form.querySelector('input[name="side"]:checked')?.value ?? "right",
+    colors: {},
+  };
   NUMBER_FIELDS.forEach((k) => (s[k] = input(k).valueAsNumber));
   COLOR_KEYS.forEach((k) => (s.colors[k] = input(`colors.${k}`).value));
   return s;
@@ -100,9 +119,15 @@ document.getElementById("reset-all").addEventListener("click", () => {
   showErrors([], "");
 });
 
-Promise.all([invoke("get_settings"), invoke("default_settings"), invoke("get_sources")]).then(([s, d, av]) => {
+Promise.all([
+  invoke("get_settings"),
+  invoke("default_settings"),
+  invoke("get_sources"),
+  invoke("list_monitors"),
+]).then(([s, d, av, mons]) => {
   defaults = d;
   showSources(av);
+  showMonitors(mons);
   savedTheme = s.theme ?? "dark";
   fill(s);
 });

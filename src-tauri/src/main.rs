@@ -30,6 +30,8 @@ struct AppState {
     settings: Mutex<Settings>,
     settings_path: Option<PathBuf>,
     team: Mutex<Option<i64>>,
+    /// Painel aberto (hover)? Para reposicionar no tamanho certo ao salvar as configurações.
+    expanded: Mutex<bool>,
     /// Cache do gasto (centavos) de dias já encerrados, por data (AAAA-MM-DD).
     days: Mutex<std::collections::HashMap<String, f64>>,
     notify: Notify,
@@ -44,6 +46,7 @@ impl AppState {
             settings: Mutex::new(settings),
             settings_path,
             team: Mutex::new(None),
+            expanded: Mutex::new(false),
             days: Mutex::new(Default::default()),
             notify: Notify::new(),
         }
@@ -191,19 +194,21 @@ async fn poll_loop(app: tauri::AppHandle, state: Arc<AppState>) {
     }
 }
 
-/// Posiciona a janela colada na borda direita do monitor mais à direita, centrada na vertical.
-fn place(win: &WebviewWindow, expanded: bool) {
+/// Posiciona a janela colada na borda escolhida do monitor escolhido, centrada na vertical.
+/// Monitor vazio ou desconectado: o mais à direita (comportamento original).
+fn place(win: &WebviewWindow, expanded: bool, settings: &Settings) {
     let monitors = win.available_monitors().unwrap_or_default();
-    let Some(m) = monitors
-        .iter()
-        .max_by_key(|m| m.position().x + m.size().width as i32)
-    else {
+    let chosen = monitors.iter().find(|m| !settings.monitor.is_empty() && m.name().is_some_and(|n| *n == settings.monitor));
+    let Some(m) = chosen.or_else(|| monitors.iter().max_by_key(|m| m.position().x + m.size().width as i32)) else {
         return;
     };
     let scale = m.scale_factor();
     let (w, h) = if expanded { EXPANDED } else { COLLAPSED };
     let (pw, ph) = ((w * scale).round() as u32, (h * scale).round() as u32);
-    let x = m.position().x + m.size().width as i32 - pw as i32;
+    let x = match settings.side {
+        settings::Side::Left => m.position().x,
+        settings::Side::Right => m.position().x + m.size().width as i32 - pw as i32,
+    };
     let y = m.position().y + (m.size().height as i32 - ph as i32) / 2;
     let _ = win.set_size(PhysicalSize::new(pw, ph));
     let _ = win.set_position(PhysicalPosition::new(x, y));
@@ -229,8 +234,35 @@ fn set_cookie(cookie: String, state: State<'_, Arc<AppState>>) -> Result<(), Str
 }
 
 #[tauri::command]
-fn set_expanded(window: WebviewWindow, expanded: bool) {
-    place(&window, expanded);
+fn set_expanded(window: WebviewWindow, expanded: bool, state: State<'_, Arc<AppState>>) {
+    *state.expanded.lock().unwrap() = expanded;
+    let settings = state.settings.lock().unwrap().clone();
+    place(&window, expanded, &settings);
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MonitorInfo {
+    name: String,
+    label: String,
+}
+
+/// Monitores conectados, da esquerda para a direita, para o seletor das configurações.
+#[tauri::command]
+fn list_monitors(app: tauri::AppHandle) -> Vec<MonitorInfo> {
+    let mut monitors = app.available_monitors().unwrap_or_default();
+    monitors.sort_by_key(|m| (m.position().x, m.position().y));
+    let primary = app.primary_monitor().ok().flatten().and_then(|m| m.name().cloned());
+    monitors
+        .iter()
+        .enumerate()
+        .filter_map(|(i, m)| {
+            let name = m.name()?.clone();
+            let s = m.size();
+            let main = if primary.as_ref() == Some(&name) { " · principal" } else { "" };
+            Some(MonitorInfo { label: format!("Monitor {} · {}×{}{main}", i + 1, s.width, s.height), name })
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -263,6 +295,9 @@ fn save_settings(
     })?;
     settings::save(path, &settings).map_err(|message| SaveError { message, fields: Vec::new() })?;
     *state.settings.lock().unwrap() = settings.clone();
+    if let Some(w) = app.get_webview_window("main") {
+        place(&w, *state.expanded.lock().unwrap(), &settings);
+    }
     let _ = app.emit("settings", &settings);
     state.notify.notify_one();
     Ok(settings)
@@ -326,6 +361,7 @@ fn main() {
             set_expanded,
             get_settings,
             get_sources,
+            list_monitors,
             default_settings,
             save_settings,
             open_settings,
@@ -334,7 +370,7 @@ fn main() {
         .setup(move |app| {
             register_toast_identity(&app.config().identifier);
             let win = app.get_webview_window("main").expect("janela main");
-            place(&win, false);
+            place(&win, false, &state.settings.lock().unwrap());
 
             let refresh = MenuItem::with_id(app, "refresh", "Atualizar agora", true, None::<&str>)?;
             let open_cfg = MenuItem::with_id(app, "settings", "Configurações…", true, None::<&str>)?;
