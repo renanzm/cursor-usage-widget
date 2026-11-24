@@ -1,5 +1,5 @@
 const { invoke } = window.__TAURI__.core;
-const { getCurrentWindow } = window.__TAURI__.window;
+const closeWindow = () => invoke("close_settings");
 
 const form = document.getElementById("form");
 const NUMBER_FIELDS = ["quotaUsd", "windowHours", "rateMax", "lowMax", "highMin", "dayMaxUsd", "pollSeconds"];
@@ -67,7 +67,7 @@ form.addEventListener("submit", async (e) => {
   if (missing.length) return showErrors(missing, "Corrija os campos destacados.");
   try {
     await invoke("save_settings", { settings: s });
-    await getCurrentWindow().close();
+    await closeWindow();
   } catch (err) {
     showErrors(err?.fields ?? [], err?.message ?? String(err));
   }
@@ -75,7 +75,7 @@ form.addEventListener("submit", async (e) => {
 
 document.getElementById("cancel").addEventListener("click", () => {
   applyTheme(savedTheme);
-  getCurrentWindow().close();
+  closeWindow();
 });
 document.getElementById("reset-colors").addEventListener("click", () => fill(defaults, { colorsOnly: true }));
 document.getElementById("reset-all").addEventListener("click", () => {

@@ -22,7 +22,7 @@ use usage::{FetchError, Snapshot};
 
 // Tamanhos lógicos (DIPs) da janela: recolhida (aba) e expandida (painel).
 const COLLAPSED: (f64, f64) = (56.0, 112.0);
-const EXPANDED: (f64, f64) = (272.0, 620.0);
+const EXPANDED: (f64, f64) = (272.0, 680.0);
 
 struct AppState {
     snapshot: Mutex<Snapshot>,
@@ -248,6 +248,14 @@ async fn open_settings(app: tauri::AppHandle) {
     show_settings(&app);
 }
 
+/// Fecha a janela de configurações pelo lado do Rust (o `window.close` do JS esbarrava no ACL).
+#[tauri::command]
+async fn close_settings(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.close();
+    }
+}
+
 fn main() {
     // Modo diagnóstico: `cursor-usage-widget --once` imprime o snapshot e sai.
     if std::env::args().any(|a| a == "--once") {
@@ -273,7 +281,8 @@ fn main() {
             get_settings,
             default_settings,
             save_settings,
-            open_settings
+            open_settings,
+            close_settings
         ])
         .setup(move |app| {
             register_toast_identity(&app.config().identifier);

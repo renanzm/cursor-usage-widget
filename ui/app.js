@@ -90,10 +90,23 @@ function fmtReset(ms) {
   const rel = h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : h ? `${h}h ${m}min` : `${m}min`;
   return "reseta em " + rel;
 }
+// Depois do reset a leitura antiga não vale mais: `null` até o Claude Code gravar de novo.
+const validLimit = (pct, resets) =>
+  typeof pct === "number" && !(resets && resets < Date.now()) ? Math.max(0, pct) : null;
+
+// Plano por assinatura (Pro/Max/Ultra): o limite mais apertado entre a janela de 5h e a semana.
+function tightestLimit(s) {
+  const opts = [
+    { label: "5h", pct: validLimit(s.limit5hPct, s.limit5hResetsMs) },
+    { label: "semana", pct: validLimit(s.limit7dPct, s.limit7dResetsMs) },
+  ].filter((o) => o.pct !== null);
+  return opts.length ? opts.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
+}
+
 function renderLimit(key, pct, resets) {
-  // Depois do reset a leitura antiga não vale mais: mostra "--" até o Claude Code gravar de novo.
-  const has = typeof pct === "number" && !(resets && resets < Date.now());
-  const p = has ? Math.max(0, pct) : 0;
+  const v = validLimit(pct, resets);
+  const has = v !== null;
+  const p = has ? v : 0;
   const box = $(`lim${key}-pct`).closest(".lim");
   box.classList.toggle("warn", has && p >= 75 && p < 90);
   box.classList.toggle("crit", has && p >= 90);
@@ -131,9 +144,20 @@ function render(s) {
   const pct = s.cycleLimitUsd > 0 ? (s.cycleUsedUsd / s.cycleLimitUsd) * 100 : 0;
   root.style.setProperty("--cycle", cycleColor(pct));
 
-  // aba
-  $("tab-amount").textContent = s.status === "auth" ? "!" : "$" + Math.round(s.cycleUsedUsd);
-  $("tab-fill").style.height = Math.min(pct, 100) + "%";
+  // aba: com limites do plano, mostra o mais apertado (5h ou semana); sem eles, o ciclo em US$.
+  const lim = s.status === "auth" ? null : tightestLimit(s);
+  if (lim) {
+    $("tab-amount").textContent = Math.round(lim.pct) + "%";
+    $("tab-label").textContent = lim.label;
+    $("tab-fill").style.height = Math.min(lim.pct, 100) + "%";
+    $("tab-fill").style.background =
+      lim.pct >= 90 ? "var(--lvl-high)" : lim.pct >= 75 ? "var(--lvl-mid)" : "var(--lvl-low)";
+  } else {
+    $("tab-amount").textContent = s.status === "auth" ? "!" : "$" + Math.round(s.cycleUsedUsd);
+    $("tab-label").textContent = "ciclo";
+    $("tab-fill").style.height = Math.min(pct, 100) + "%";
+    $("tab-fill").style.background = "";
+  }
 
   const wh = hoursLabel(s.windowHours ?? 3);
   $("window-label").textContent = wh;
