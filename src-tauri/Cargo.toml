@@ -1,8 +1,9 @@
 [package]
 name = "cursor-usage-widget"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
-description = "Widget de gasto do Cursor (ciclo mensal + velocímetro das últimas 3h)"
+description = "Widget de mesa com gasto e limites do Cursor, Claude Code e Codex"
+license = "MIT"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

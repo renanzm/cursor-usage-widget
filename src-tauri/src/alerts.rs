@@ -54,6 +54,11 @@ impl Alerts {
         };
         let stage = stage_of(pct);
         let high = s.level == "high";
+        let src = match s.source.as_str() {
+            "claude" => "Claude Code",
+            "codex" => "Codex",
+            _ => "Cursor",
+        };
 
         // Novo ciclo mensal ou primeira leitura: apenas registra o estado, sem avisar.
         if !self.initialized || self.cycle_start != s.cycle_start {
@@ -68,11 +73,11 @@ impl Alerts {
             let restante = (s.cycle_limit_usd - s.cycle_used_usd).max(0.0);
             let (title, body) = match stage {
                 100 => (
-                    "Cursor: limite do ciclo atingido".to_string(),
+                    format!("{src}: limite do ciclo atingido"),
                     format!("{} de {} usados.", usd(s.cycle_used_usd), usd(s.cycle_limit_usd)),
                 ),
                 n => (
-                    format!("Cursor: {n}% do limite do ciclo"),
+                    format!("{src}: {n}% do limite do ciclo"),
                     format!(
                         "{} de {} usados · restam {}.",
                         usd(s.cycle_used_usd),
@@ -93,7 +98,7 @@ impl Alerts {
             if cooled {
                 notify(
                     app,
-                    "Cursor: ritmo de gasto alto",
+                    &format!("{src}: ritmo de gasto alto"),
                     &format!(
                         "{}/h nas últimas {}h ({} no período).",
                         usd(s.rate_per_hour),
