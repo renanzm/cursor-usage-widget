@@ -11,6 +11,16 @@
     <h1>Configurações</h1>
 
     <fieldset>
+      <legend>Fonte de dados</legend>
+      <div class="source-list">
+        <label><input type="radio" name="source" value="auto" /> Automático <small data-src-note="auto"></small></label>
+        <label><input type="radio" name="source" value="claude" /> Claude Code <small data-src-note="claude"></small></label>
+        <label><input type="radio" name="source" value="codex" /> Codex <small data-src-note="codex"></small></label>
+        <label><input type="radio" name="source" value="cursor" /> Cursor <small data-src-note="cursor"></small></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
       <legend>Cota mensal</legend>
       <div class="seg-toggle">
         <label><input type="radio" name="quotaMode" value="auto" /> Automático (do Cursor)</label>

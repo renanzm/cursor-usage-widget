@@ -11,6 +11,7 @@
     <!-- Aba recolhida -->
     <section class="tab">
       <span class="dot"></span>
+      <span id="tab-src" class="tab-src"></span>
       <span id="tab-amount" class="tab-amount">--</span>
       <span id="tab-label" class="tab-label">ciclo</span>
       <span class="tab-bar"><i id="tab-fill"></i></span>
@@ -21,6 +22,7 @@
       <header class="row r1">
         <span class="eyebrow">Ritmo · <span id="window-label">3h</span></span>
         <span class="head-right">
+          <span id="source-badge" class="source-badge" hidden></span>
           <span id="clock" class="clock"></span>
           <button id="open-settings" class="gear" type="button" title="Configurações" aria-label="Configurações">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -66,16 +68,16 @@
         </div>
       </div>
 
-      <div class="divider row r4"></div>
+      <div id="lim-divider" class="divider row r4"></div>
 
-      <div class="limits row r4">
+      <div id="limits" class="limits row r4">
         <div class="lim">
-          <div class="lim-head"><span class="eyebrow">Sessão · 5h</span><span id="lim5-pct" class="pct">--</span></div>
+          <div class="lim-head"><span id="lim5-label" class="eyebrow">Sessão · 5h</span><span id="lim5-pct" class="pct">--</span></div>
           <div class="bar"><i id="lim5-fill"></i></div>
           <div id="lim5-reset" class="lim-sub"></div>
         </div>
         <div class="lim">
-          <div class="lim-head"><span class="eyebrow">Semana</span><span id="lim7-pct" class="pct">--</span></div>
+          <div class="lim-head"><span id="lim7-label" class="eyebrow">Semana</span><span id="lim7-pct" class="pct">--</span></div>
           <div class="bar"><i id="lim7-fill"></i></div>
           <div id="lim7-reset" class="lim-sub"></div>
         </div>

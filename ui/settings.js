@@ -17,8 +17,25 @@ function syncQuotaMode() {
   input("quotaUsd").disabled = quotaMode() !== "manual";
 }
 
+const SOURCE_NAMES = { claude: "Claude Code", codex: "Codex", cursor: "Cursor" };
+const source = () => form.querySelector('input[name="source"]:checked')?.value ?? "auto";
+
+// Marca o que existe nesta máquina; Claude/Codex sem logs ficam desabilitados.
+function showSources(av) {
+  const note = (k, t) => (form.querySelector(`[data-src-note="${k}"]`).textContent = t);
+  note("claude", av.claude ? "logs encontrados" : "não encontrado");
+  note("codex", av.codex ? "logs encontrados" : "não encontrado");
+  note("cursor", av.cursor ? "cookie salvo" : "pede o cookie no widget");
+  form.querySelector('input[name="source"][value="claude"]').disabled = !av.claude;
+  form.querySelector('input[name="source"][value="codex"]').disabled = !av.codex;
+  const auto = av.claude ? "claude" : av.codex ? "codex" : "cursor";
+  note("auto", "usa " + SOURCE_NAMES[auto]);
+}
+
 function fill(s, { colorsOnly = false } = {}) {
   if (!colorsOnly) {
+    const radio = form.querySelector(`input[name="source"][value="${s.source ?? "auto"}"]`);
+    (radio.disabled ? form.querySelector('input[name="source"][value="auto"]') : radio).checked = true;
     form.querySelector(`input[name="quotaMode"][value="${s.quotaMode}"]`).checked = true;
     form.querySelector(`input[name="theme"][value="${s.theme ?? "dark"}"]`).checked = true;
     applyTheme(s.theme ?? "dark");
@@ -29,7 +46,7 @@ function fill(s, { colorsOnly = false } = {}) {
 }
 
 function read() {
-  const s = { quotaMode: quotaMode(), theme: theme(), colors: {} };
+  const s = { source: source(), quotaMode: quotaMode(), theme: theme(), colors: {} };
   NUMBER_FIELDS.forEach((k) => (s[k] = input(k).valueAsNumber));
   COLOR_KEYS.forEach((k) => (s.colors[k] = input(`colors.${k}`).value));
   return s;
@@ -83,8 +100,9 @@ document.getElementById("reset-all").addEventListener("click", () => {
   showErrors([], "");
 });
 
-Promise.all([invoke("get_settings"), invoke("default_settings")]).then(([s, d]) => {
+Promise.all([invoke("get_settings"), invoke("default_settings"), invoke("get_sources")]).then(([s, d, av]) => {
   defaults = d;
+  showSources(av);
   savedTheme = s.theme ?? "dark";
   fill(s);
 });

@@ -56,6 +56,10 @@ legend { padding: 0 6px; font-size: 10.5px; font-weight: 600; color: var(--g5); 
 .seg-toggle { display: flex; gap: 14px; }
 .seg-toggle label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 input[type="radio"] { accent-color: var(--orange); }
+.source-list { display: grid; gap: 8px; }
+.source-list label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.source-list label:has(input:disabled) { opacity: .45; cursor: default; }
+.source-list small { margin-left: auto; color: var(--g5); font-size: 11px; }
 
 .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
 .colors .field { grid-template-columns: 1fr 44px; }

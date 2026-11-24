@@ -141,13 +141,26 @@ fn root_dir() -> PathBuf {
     PathBuf::from(home).join(".claude").join("projects")
 }
 
-fn compute(settings: &Settings) -> Result<Snapshot, String> {
-    let root = root_dir();
-    if !root.is_dir() {
-        return Err(format!("Pasta não encontrada: {}", root.display()));
-    }
-    let now = Local::now();
-    let today = now.date_naive();
+/// Pasta de logs do Claude Code existe nesta máquina?
+pub fn available() -> bool {
+    root_dir().is_dir()
+}
+
+/// Início (ms) do período que interessa: o menor entre o 1º dia do mês e a segunda-feira desta semana.
+pub fn period_start_ms() -> i64 {
+    let today = Local::now().date_naive();
+    let monday = today - Duration::days(today.weekday().num_days_from_monday() as i64);
+    local_midnight_ms(today.with_day(1).unwrap().min(monday))
+}
+
+/// Mtime mínimo para um arquivo de log ainda ter eventos do período.
+pub fn min_mtime() -> SystemTime {
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(period_start_ms().max(0) as u64)
+}
+
+/// Monta o snapshot (ciclo = mês corrente, ritmo, semana seg–sex) a partir de (instante ms, centavos).
+pub fn summarize(events: impl Iterator<Item = (i64, f64)>, settings: &Settings) -> Snapshot {
+    let today = Local::now().date_naive();
     let today_idx = today.weekday().num_days_from_monday() as usize;
     let monday = today - Duration::days(today_idx as i64);
     let month_start = today.with_day(1).unwrap();
@@ -157,10 +170,49 @@ fn compute(settings: &Settings) -> Result<Snapshot, String> {
         NaiveDate::from_ymd_opt(month_start.year(), month_start.month() + 1, 1)
     }
     .unwrap();
-    let from = local_midnight_ms(month_start.min(monday));
+    let end = now_ms() as i64;
+    let win_start = end - (settings.window_hours * 3_600_000.0) as i64;
+    let month_ms = local_midnight_ms(month_start);
+    let day_ms: Vec<i64> = (0..6).map(|i| local_midnight_ms(monday + Duration::days(i))).collect();
 
-    // Só abre arquivos tocados desde o início do período relevante.
-    let min_mtime = SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(from.max(0) as u64);
+    let (mut cycle, mut win, mut win_n) = (0.0, 0.0, 0u64);
+    let mut days = [0.0f64; 5];
+    for (ts, cents) in events {
+        if ts >= month_ms {
+            cycle += cents;
+        }
+        if ts >= win_start {
+            win += cents;
+            win_n += 1;
+        }
+        for i in 0..5 {
+            if ts >= day_ms[i] && ts < day_ms[i + 1] {
+                days[i] += cents;
+            }
+        }
+    }
+
+    let local = |d: NaiveDate| Local.from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap()).earliest().unwrap().to_rfc3339();
+    let mut snap = Snapshot::empty("ok", None, settings);
+    snap.cycle_used_usd = cycle / 100.0;
+    snap.cycle_start = Some(local(month_start));
+    snap.cycle_end = Some(local(next_month));
+    snap.window_usd = win / 100.0;
+    snap.window_events = win_n;
+    snap.rate_per_hour = snap.window_usd / settings.window_hours;
+    snap.week_usd = (0..5).map(|i| (i <= today_idx).then_some(days[i] / 100.0)).collect();
+    snap.week_today = (today_idx <= 4).then_some(today_idx);
+    snap.level = level_of(snap.rate_per_hour, snap.low_max, snap.high_min).into();
+    snap
+}
+
+fn compute(settings: &Settings) -> Result<Snapshot, String> {
+    let root = root_dir();
+    if !root.is_dir() {
+        return Err(format!("Pasta não encontrada: {}", root.display()));
+    }
+    let from = period_start_ms();
+    let min_mtime = min_mtime();
     let mut files = Vec::new();
     collect_files(&root, min_mtime, &mut files);
 
@@ -187,44 +239,13 @@ fn compute(settings: &Settings) -> Result<Snapshot, String> {
     }
     drop(guard);
 
-    let end = now_ms() as i64;
-    let win_start = end - (settings.window_hours * 3_600_000.0) as i64;
-    let month_ms = local_midnight_ms(month_start);
-    let day_ms: Vec<i64> = (0..6).map(|i| local_midnight_ms(monday + Duration::days(i))).collect();
-
-    let (mut cycle, mut win, mut win_n) = (0.0, 0.0, 0u64);
-    let mut days = [0.0f64; 5];
-    for ev in dedup.values() {
-        if ev.ts_ms >= month_ms {
-            cycle += ev.cents;
-        }
-        if ev.ts_ms >= win_start {
-            win += ev.cents;
-            win_n += 1;
-        }
-        for i in 0..5 {
-            if ev.ts_ms >= day_ms[i] && ev.ts_ms < day_ms[i + 1] {
-                days[i] += ev.cents;
-            }
-        }
-    }
-
-    let mut snap = Snapshot::empty("ok", None, settings);
-    snap.cycle_used_usd = cycle / 100.0;
-    snap.cycle_start = Some(Local.from_local_datetime(&month_start.and_hms_opt(0, 0, 0).unwrap()).earliest().unwrap().to_rfc3339());
-    snap.cycle_end = Some(Local.from_local_datetime(&next_month.and_hms_opt(0, 0, 0).unwrap()).earliest().unwrap().to_rfc3339());
-    snap.window_usd = win / 100.0;
-    snap.window_events = win_n;
-    snap.rate_per_hour = snap.window_usd / settings.window_hours;
-    snap.week_usd = (0..5).map(|i| (i <= today_idx).then_some(days[i] / 100.0)).collect();
-    snap.week_today = (today_idx <= 4).then_some(today_idx);
-    snap.level = level_of(snap.rate_per_hour, snap.low_max, snap.high_min).into();
+    let mut snap = summarize(dedup.values().map(|e| (e.ts_ms, e.cents)), settings);
     apply_limits(&mut snap);
     Ok(snap)
 }
 
 /// `resets_at` pode vir em segundos, milissegundos ou texto ISO-8601.
-fn to_ms(v: &Value) -> Option<i64> {
+pub fn to_ms(v: &Value) -> Option<i64> {
     if let Some(n) = v.as_f64() {
         return Some(if n < 1e11 { (n * 1000.0) as i64 } else { n as i64 });
     }
@@ -245,7 +266,63 @@ fn apply_limits(snap: &mut Snapshot) {
     snap.limit_7d_resets_ms = to_ms(&rl["seven_day"]["resets_at"]);
 }
 
+/// Última resposta do endpoint de uso (instante, JSON): consulta no máximo 1x por minuto.
+static API: Mutex<Option<(std::time::Instant, Value)>> = Mutex::new(None);
+
+/// Token OAuth do Claude Code (`~/.claude/.credentials.json`); só é enviado para api.anthropic.com.
+fn access_token() -> Option<String> {
+    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
+    let text = fs::read_to_string(PathBuf::from(home).join(".claude").join(".credentials.json")).ok()?;
+    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
+    let o = &v["claudeAiOauth"];
+    if o["expiresAt"].as_i64().is_some_and(|e| e <= now_ms() as i64) {
+        return None; // expirado: o Claude Code renova sozinho; até lá vale a status line
+    }
+    o["accessToken"].as_str().map(str::to_owned)
+}
+
+/// Mesmo endpoint do `/usage` do Claude Code (não documentado: falhas caem na status line).
+async fn api_usage() -> Option<Value> {
+    if let Some((t, v)) = API.lock().unwrap().as_ref() {
+        if t.elapsed() < std::time::Duration::from_secs(60) {
+            return Some(v.clone());
+        }
+    }
+    let token = access_token()?;
+    let v: Value = reqwest::Client::new()
+        .get("https://api.anthropic.com/api/oauth/usage")
+        .bearer_auth(token)
+        .header("anthropic-beta", "oauth-2025-04-20")
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    *API.lock().unwrap() = Some((std::time::Instant::now(), v.clone()));
+    Some(v)
+}
+
+fn apply_api(snap: &mut Snapshot, v: &Value) {
+    let pct = |k: &str| v[k]["utilization"].as_f64();
+    if pct("five_hour").is_none() && pct("seven_day").is_none() {
+        return;
+    }
+    snap.limits_updated_ms = Some(now_ms());
+    snap.limit_5h_pct = pct("five_hour");
+    snap.limit_5h_resets_ms = to_ms(&v["five_hour"]["resets_at"]);
+    snap.limit_7d_pct = pct("seven_day");
+    snap.limit_7d_resets_ms = to_ms(&v["seven_day"]["resets_at"]);
+}
+
 pub async fn fetch(settings: &Settings) -> Result<Snapshot, String> {
     let s = settings.clone();
-    tokio::task::spawn_blocking(move || compute(&s)).await.map_err(|e| e.to_string())?
+    let mut snap = tokio::task::spawn_blocking(move || compute(&s)).await.map_err(|e| e.to_string())??;
+    if let Some(v) = api_usage().await {
+        apply_api(&mut snap, &v);
+    }
+    Ok(snap)
 }

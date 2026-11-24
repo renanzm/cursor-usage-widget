@@ -2,11 +2,12 @@
 
 mod alerts;
 mod claude;
+mod codex;
 mod config;
 mod settings;
 mod usage;
 
-use settings::{SaveError, Settings};
+use settings::{SaveError, Settings, Source};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -92,25 +93,62 @@ fn http_client() -> reqwest::Client {
         .expect("cliente HTTP")
 }
 
-/// Fonte dos dados: `USAGE_SOURCE=claude` (padrão, logs locais do Claude Code) ou `cursor` (dashboard web).
-fn source_is_cursor() -> bool {
-    config::setting("USAGE_SOURCE").is_some_and(|s| s.eq_ignore_ascii_case("cursor"))
+/// Quais fontes têm dados nesta máquina (Cursor = cookie salvo).
+#[derive(serde::Serialize)]
+struct Sources {
+    claude: bool,
+    codex: bool,
+    cursor: bool,
+}
+
+fn sources() -> Sources {
+    Sources { claude: claude::available(), codex: codex::available(), cursor: config::load_cookie().is_some() }
+}
+
+/// Fonte efetiva: a escolhida, ou em `Auto` a primeira disponível (Claude Code, Codex, Cursor).
+fn resolve_source(chosen: Source) -> Source {
+    if chosen != Source::Auto {
+        return chosen;
+    }
+    let s = sources();
+    if s.claude {
+        Source::Claude
+    } else if s.codex {
+        Source::Codex
+    } else {
+        Source::Cursor
+    }
 }
 
 async fn run_once(client: &reqwest::Client, state: &AppState) -> Snapshot {
     let settings = state.settings.lock().unwrap().clone();
-    let result = if source_is_cursor() {
-        let Some(cookie) = config::load_cookie() else {
-            return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
-        };
-        let mut team = *state.team.lock().unwrap();
-        let mut days = std::mem::take(&mut *state.days.lock().unwrap());
-        let r = usage::fetch(client, &cookie, &settings, &mut team, &mut days).await;
-        *state.team.lock().unwrap() = team;
-        *state.days.lock().unwrap() = days;
-        r
-    } else {
-        claude::fetch(&settings).await.map_err(FetchError::Other)
+    let source = resolve_source(settings.source);
+    let mut snap = fetch_source(client, state, &settings, source).await;
+    snap.source = match source {
+        Source::Codex => "codex",
+        Source::Cursor => "cursor",
+        _ => "claude",
+    }
+    .into();
+    snap
+}
+
+async fn fetch_source(client: &reqwest::Client, state: &AppState, settings: &Settings, source: Source) -> Snapshot {
+    let settings = settings.clone();
+    let result = match source {
+        Source::Cursor => {
+            let Some(cookie) = config::load_cookie() else {
+                return Snapshot::empty("auth", Some("Cole o cookie WorkosCursorSessionToken".into()), &settings);
+            };
+            let mut team = *state.team.lock().unwrap();
+            let mut days = std::mem::take(&mut *state.days.lock().unwrap());
+            let r = usage::fetch(client, &cookie, &settings, &mut team, &mut days).await;
+            *state.team.lock().unwrap() = team;
+            *state.days.lock().unwrap() = days;
+            r
+        }
+        Source::Codex => codex::fetch(&settings).await.map_err(FetchError::Other),
+        _ => claude::fetch(&settings).await.map_err(FetchError::Other),
     };
     match result {
         Ok(s) => s,
@@ -201,6 +239,11 @@ fn get_settings(state: State<'_, Arc<AppState>>) -> Settings {
 }
 
 #[tauri::command]
+fn get_sources() -> Sources {
+    sources()
+}
+
+#[tauri::command]
 fn default_settings() -> Settings {
     Settings::default()
 }
@@ -257,11 +300,14 @@ async fn close_settings(app: tauri::AppHandle) {
 }
 
 fn main() {
-    // Modo diagnóstico: `cursor-usage-widget --once` imprime o snapshot e sai.
+    // Modo diagnóstico: `cursor-usage-widget --once [--source=claude|codex|cursor]` imprime o snapshot e sai.
     if std::env::args().any(|a| a == "--once") {
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         rt.block_on(async {
             let state = AppState::new();
+            if let Some(s) = std::env::args().find_map(|a| a.strip_prefix("--source=").map(str::to_owned)) {
+                state.settings.lock().unwrap().source = settings::parse(&format!(r#"{{"source":"{s}"}}"#)).source;
+            }
             let snap = run_once(&http_client(), &state).await;
             println!("{}", serde_json::to_string_pretty(&snap).unwrap());
         });
@@ -279,6 +325,7 @@ fn main() {
             set_cookie,
             set_expanded,
             get_settings,
+            get_sources,
             default_settings,
             save_settings,
             open_settings,

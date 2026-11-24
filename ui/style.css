@@ -68,6 +68,11 @@ body {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 12px var(--accent); }
 .tab-amount { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
 .tab-label { font-size: 8.5px; text-transform: uppercase; letter-spacing: 1.4px; color: var(--g5); }
+.tab-src { font-size: 7.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px; color: var(--g4); }
+.source-badge {
+  padding: 1px 7px; border-radius: 999px; border: 1px solid var(--g3);
+  font-size: 9.5px; font-weight: 600; letter-spacing: .3px; color: var(--g5); white-space: nowrap;
+}
 .tab-bar { width: 5px; height: 26px; margin-top: 3px; background: var(--g3); border-radius: 3px; position: relative; overflow: hidden; }
 .tab-bar i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--cycle); border-radius: 3px; transition: height .6s ease; }
 

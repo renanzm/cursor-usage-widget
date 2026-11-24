@@ -26,6 +26,28 @@ pub enum Theme {
     Light,
 }
 
+/// De onde ler o uso. `Auto` usa a primeira disponível: Claude Code, Codex, Cursor.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Source {
+    #[default]
+    Auto,
+    Claude,
+    Codex,
+    Cursor,
+}
+
+impl Source {
+    fn from_str(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "claude" => Source::Claude,
+            "codex" => Source::Codex,
+            "cursor" => Source::Cursor,
+            _ => Source::Auto,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Colors {
     pub accent: String,
@@ -48,6 +70,9 @@ impl Default for Colors {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    /// Fonte dos dados (Claude Code, Codex ou Cursor).
+    #[serde(default)]
+    pub source: Source,
     pub quota_mode: QuotaMode,
     pub quota_usd: f64,
     pub window_hours: f64,
@@ -67,6 +92,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
+            source: Source::Auto,
             quota_mode: QuotaMode::Auto,
             quota_usd: 1000.0,
             window_hours: 3.0,
@@ -192,6 +218,7 @@ pub fn parse(text: &str) -> Settings {
         _ => Theme::Dark,
     };
     Settings {
+        source: Source::from_str(v["source"].as_str().unwrap_or("")),
         quota_mode,
         theme,
         quota_usd: num("quotaUsd", d.quota_usd),
@@ -215,6 +242,7 @@ pub fn parse(text: &str) -> Settings {
 pub fn from_env() -> Settings {
     let d = Settings::default();
     Settings {
+        source: Source::from_str(&config::setting("USAGE_SOURCE").unwrap_or_default()),
         quota_usd: config::setting_f64("CYCLE_LIMIT_USD", d.quota_usd),
         rate_max: config::setting_f64("RATE_MAX", d.rate_max),
         low_max: config::setting_f64("RATE_LOW_MAX", d.low_max),
@@ -375,6 +403,16 @@ mod tests {
         let json = serde_json::to_value(&s).unwrap();
         assert_eq!(json["theme"], "light");
         assert_eq!(serde_json::from_value::<Settings>(json).unwrap().theme, Theme::Light);
+    }
+
+    #[test]
+    fn parse_source() {
+        assert_eq!(parse(r#"{"source":"codex"}"#).source, Source::Codex);
+        assert_eq!(parse(r#"{"source":"Cursor"}"#).source, Source::Cursor);
+        assert_eq!(parse(r#"{"source":"x"}"#).source, Source::Auto);
+        assert_eq!(parse("{}").source, Source::Auto);
+        let json = serde_json::to_value(Settings { source: Source::Claude, ..Default::default() }).unwrap();
+        assert_eq!(json["source"], "claude");
     }
 
     #[test]

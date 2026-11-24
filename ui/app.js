@@ -94,11 +94,15 @@ function fmtReset(ms) {
 const validLimit = (pct, resets) =>
   typeof pct === "number" && !(resets && resets < Date.now()) ? Math.max(0, pct) : null;
 
-// Plano por assinatura (Pro/Max/Ultra): o limite mais apertado entre a janela de 5h e a semana.
+const SOURCE_LABEL = { claude: "Claude Code", codex: "Codex", cursor: "Cursor" };
+const shortLabel = (s) => s.limit5hLabel ?? "5h";
+const longLabel = (s) => s.limit7dLabel ?? "Semana";
+
+// Plano por assinatura (Claude Pro/Max, ChatGPT/Codex): o limite mais apertado entre a janela curta e a longa.
 function tightestLimit(s) {
   const opts = [
-    { label: "5h", pct: validLimit(s.limit5hPct, s.limit5hResetsMs) },
-    { label: "semana", pct: validLimit(s.limit7dPct, s.limit7dResetsMs) },
+    { label: shortLabel(s), pct: validLimit(s.limit5hPct, s.limit5hResetsMs) },
+    { label: longLabel(s).toLowerCase(), pct: validLimit(s.limit7dPct, s.limit7dResetsMs) },
   ].filter((o) => o.pct !== null);
   return opts.length ? opts.reduce((a, b) => (b.pct > a.pct ? b : a)) : null;
 }
@@ -115,16 +119,28 @@ function renderLimit(key, pct, resets) {
   $(`lim${key}-reset`).textContent = typeof resets === "number" ? fmtReset(resets) : "";
 }
 function renderLimits(s) {
+  // O Cursor não tem limites de janela: some com o bloco.
+  const show = s.source !== "cursor";
+  $("limits").hidden = !show;
+  $("lim-divider").hidden = !show;
+  if (!show) return;
+  const app = SOURCE_LABEL[s.source] ?? "Claude Code";
+  $("lim5-label").textContent = "Sessão · " + shortLabel(s);
+  $("lim7-label").textContent = longLabel(s) === "Semana" ? "Semana" : "Período · " + longLabel(s);
   renderLimit("5", s.limit5hPct, s.limit5hResetsMs);
   renderLimit("7", s.limit7dPct, s.limit7dResetsMs);
+  // O plano do Codex pode ter uma janela só: esconde a outra quando já há leitura.
+  const partial = s.source === "codex" && s.limitsUpdatedMs;
+  $("lim5-pct").closest(".lim").hidden = partial && s.limit5hPct == null;
+  $("lim7-pct").closest(".lim").hidden = partial && s.limit7dPct == null;
   const note = $("lim-note");
   if (s.limitsUpdatedMs) {
     const min = Math.floor((Date.now() - s.limitsUpdatedMs) / 60000);
     note.hidden = min < 10;
-    note.textContent = `Última leitura há ${min < 60 ? min + " min" : Math.floor(min / 60) + " h"} (atualiza com o Claude Code aberto)`;
+    note.textContent = `Última leitura há ${min < 60 ? min + " min" : Math.floor(min / 60) + " h"} (atualiza com o ${app} aberto)`;
   } else {
     note.hidden = false;
-    note.textContent = "Aguardando o Claude Code (abra uma sessão e envie uma mensagem)";
+    note.textContent = `Aguardando o ${app} (abra uma sessão e envie uma mensagem)`;
   }
 }
 
@@ -158,6 +174,13 @@ function render(s) {
     $("tab-fill").style.height = Math.min(pct, 100) + "%";
     $("tab-fill").style.background = "";
   }
+
+  const badge = $("source-badge");
+  badge.hidden = !SOURCE_LABEL[s.source];
+  badge.textContent = SOURCE_LABEL[s.source] ?? "";
+  $("tab-src").textContent = SOURCE_LABEL[s.source]?.split(" ")[0] ?? "";
+  root.dataset.source = s.source ?? "";
+  root.title = SOURCE_LABEL[s.source] ? "Fonte: " + SOURCE_LABEL[s.source] : "";
 
   const wh = hoursLabel(s.windowHours ?? 3);
   $("window-label").textContent = wh;
