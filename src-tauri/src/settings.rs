@@ -18,6 +18,14 @@ pub enum QuotaMode {
     Manual,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Colors {
     pub accent: String,
@@ -50,6 +58,9 @@ pub struct Settings {
     /// Fundo de escala diário do equalizador (US$).
     pub day_max_usd: f64,
     pub poll_seconds: f64,
+    /// Tema visual do widget e do painel.
+    #[serde(default)]
+    pub theme: Theme,
     pub colors: Colors,
 }
 
@@ -64,6 +75,7 @@ impl Default for Settings {
             high_min: 13.0,
             day_max_usd: 100.0,
             poll_seconds: 30.0,
+            theme: Theme::Dark,
             colors: Colors::default(),
         }
     }
@@ -175,8 +187,13 @@ pub fn parse(text: &str) -> Settings {
         Some("manual") => QuotaMode::Manual,
         _ => QuotaMode::Auto,
     };
+    let theme = match v["theme"].as_str() {
+        Some("light") => Theme::Light,
+        _ => Theme::Dark,
+    };
     Settings {
         quota_mode,
+        theme,
         quota_usd: num("quotaUsd", d.quota_usd),
         window_hours: num("windowHours", d.window_hours),
         rate_max: num("rateMax", d.rate_max),
@@ -343,6 +360,21 @@ mod tests {
         let s = parse("\u{feff}{\"quotaMode\":\"manual\",\"quotaUsd\":250}");
         assert_eq!(s.quota_mode, QuotaMode::Manual);
         assert_eq!(s.quota_usd, 250.0);
+    }
+
+    #[test]
+    fn parse_theme() {
+        assert_eq!(parse(r#"{"theme":"light"}"#).theme, Theme::Light);
+        assert_eq!(parse(r#"{"theme":"sepia"}"#).theme, Theme::Dark);
+        assert_eq!(parse("{}").theme, Theme::Dark);
+    }
+
+    #[test]
+    fn theme_roundtrips_as_lowercase() {
+        let s = Settings { theme: Theme::Light, ..Default::default() };
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["theme"], "light");
+        assert_eq!(serde_json::from_value::<Settings>(json).unwrap().theme, Theme::Light);
     }
 
     #[test]

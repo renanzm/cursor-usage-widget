@@ -11,6 +11,18 @@
   --red: #ff453a;
 }
 
+:root[data-theme="light"] {
+  --black: #ffffff;
+  --g1: #f2f2f7;
+  --g2: #ffffff;
+  --g3: #d1d1d6;
+  --g4: #aeaeb2;
+  --g5: #636366;
+  --text: #1c1c1e;
+  color-scheme: light;
+}
+:root { color-scheme: dark; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: var(--g1); color: var(--text); }
 body {

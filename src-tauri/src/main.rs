@@ -22,7 +22,7 @@ use usage::{FetchError, Snapshot};
 
 // Tamanhos lógicos (DIPs) da janela: recolhida (aba) e expandida (painel).
 const COLLAPSED: (f64, f64) = (56.0, 112.0);
-const EXPANDED: (f64, f64) = (272.0, 600.0);
+const EXPANDED: (f64, f64) = (272.0, 620.0);
 
 struct AppState {
     snapshot: Mutex<Snapshot>,

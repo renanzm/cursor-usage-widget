@@ -8,6 +8,10 @@ let defaults = null;
 
 const input = (name) => form.elements.namedItem(name);
 const quotaMode = () => form.querySelector('input[name="quotaMode"]:checked').value;
+const theme = () => form.querySelector('input[name="theme"]:checked')?.value ?? "dark";
+// Prévia imediata nesta janela; o widget só muda ao salvar.
+const applyTheme = (t) => (document.documentElement.dataset.theme = t);
+let savedTheme = "dark";
 
 function syncQuotaMode() {
   input("quotaUsd").disabled = quotaMode() !== "manual";
@@ -16,6 +20,8 @@ function syncQuotaMode() {
 function fill(s, { colorsOnly = false } = {}) {
   if (!colorsOnly) {
     form.querySelector(`input[name="quotaMode"][value="${s.quotaMode}"]`).checked = true;
+    form.querySelector(`input[name="theme"][value="${s.theme ?? "dark"}"]`).checked = true;
+    applyTheme(s.theme ?? "dark");
     NUMBER_FIELDS.forEach((k) => (input(k).value = s[k]));
     syncQuotaMode();
   }
@@ -23,7 +29,7 @@ function fill(s, { colorsOnly = false } = {}) {
 }
 
 function read() {
-  const s = { quotaMode: quotaMode(), colors: {} };
+  const s = { quotaMode: quotaMode(), theme: theme(), colors: {} };
   NUMBER_FIELDS.forEach((k) => (s[k] = input(k).valueAsNumber));
   COLOR_KEYS.forEach((k) => (s.colors[k] = input(`colors.${k}`).value));
   return s;
@@ -47,6 +53,7 @@ function showErrors(fields, message) {
 
 form.addEventListener("change", (e) => {
   if (e.target.name === "quotaMode") syncQuotaMode();
+  if (e.target.name === "theme") applyTheme(theme());
 });
 
 form.addEventListener("submit", async (e) => {
@@ -66,7 +73,10 @@ form.addEventListener("submit", async (e) => {
   }
 });
 
-document.getElementById("cancel").addEventListener("click", () => getCurrentWindow().close());
+document.getElementById("cancel").addEventListener("click", () => {
+  applyTheme(savedTheme);
+  getCurrentWindow().close();
+});
 document.getElementById("reset-colors").addEventListener("click", () => fill(defaults, { colorsOnly: true }));
 document.getElementById("reset-all").addEventListener("click", () => {
   fill(defaults);
@@ -75,5 +85,6 @@ document.getElementById("reset-all").addEventListener("click", () => {
 
 Promise.all([invoke("get_settings"), invoke("default_settings")]).then(([s, d]) => {
   defaults = d;
+  savedTheme = s.theme ?? "dark";
   fill(s);
 });

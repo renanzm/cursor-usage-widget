@@ -227,7 +227,11 @@ $("cookie-form").addEventListener("submit", async (e) => {
 
 // ---------- inicialização ----------
 listen("usage", (ev) => render(ev.payload));
-listen("settings", (ev) => applyColors(ev.payload.colors));
-invoke("get_settings").then((s) => applyColors(s.colors));
+const applySettings = (s) => {
+  applyColors(s.colors);
+  document.documentElement.dataset.theme = s.theme ?? "dark";
+};
+listen("settings", (ev) => applySettings(ev.payload));
+invoke("get_settings").then(applySettings);
 invoke("get_snapshot").then(render);
 setInterval(() => snap && render(snap), 60_000);
