@@ -269,16 +269,141 @@ fn apply_limits(snap: &mut Snapshot) {
 /// Última resposta do endpoint de uso (instante, JSON): consulta no máximo 1x por minuto.
 static API: Mutex<Option<(std::time::Instant, Value)>> = Mutex::new(None);
 
-/// Token OAuth do Claude Code (`~/.claude/.credentials.json`); só é enviado para api.anthropic.com.
-fn access_token() -> Option<String> {
-    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
-    let text = fs::read_to_string(PathBuf::from(home).join(".claude").join(".credentials.json")).ok()?;
-    let v: Value = serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()?;
-    let o = &v["claudeAiOauth"];
-    if o["expiresAt"].as_i64().is_some_and(|e| e <= now_ms() as i64) {
-        return None; // expirado: o Claude Code renova sozinho; até lá vale a status line
+/// Login do Claude Code: `~/.claude/.credentials.json` (ou `$CLAUDE_CONFIG_DIR`).
+fn credentials_path() -> Option<PathBuf> {
+    if let Ok(dir) = std::env::var("CLAUDE_CONFIG_DIR") {
+        return Some(PathBuf::from(dir).join(".credentials.json"));
     }
-    o["accessToken"].as_str().map(str::to_owned)
+    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
+    Some(PathBuf::from(home).join(".claude").join(".credentials.json"))
+}
+
+fn read_credentials(path: &Path) -> Option<Value> {
+    let text = fs::read_to_string(path).ok()?;
+    serde_json::from_str(text.trim_start_matches('\u{feff}')).ok()
+}
+
+/// Margem para renovar antes de expirar.
+const REFRESH_MARGIN_MS: i64 = 5 * 60 * 1000;
+/// Depois de uma renovação recusada, espera antes de tentar de novo.
+const REFRESH_BACKOFF: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
+const TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
+
+static REFRESH_FAILED: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+
+/// Token válido: o atual, ou um renovado e gravado de volta no mesmo arquivo
+/// (o app de desktop não renova esse arquivo; o Claude Code de terminal lê o token novo).
+/// Tokens só vão para api.anthropic.com e platform.claude.com.
+async fn access_token(force_refresh: bool) -> Option<String> {
+    let path = credentials_path()?;
+    let creds = read_credentials(&path)?;
+    let o = &creds["claudeAiOauth"];
+    let now = now_ms() as i64;
+    let expires = o["expiresAt"].as_i64().unwrap_or(i64::MAX);
+    if !force_refresh && expires - REFRESH_MARGIN_MS > now {
+        return o["accessToken"].as_str().map(str::to_owned);
+    }
+    if REFRESH_FAILED.lock().unwrap().is_some_and(|t| t.elapsed() < REFRESH_BACKOFF) {
+        return None;
+    }
+    match refresh(&path, &creds).await {
+        Some(token) => Some(token),
+        None => {
+            *REFRESH_FAILED.lock().unwrap() = Some(std::time::Instant::now());
+            // ainda não expirou de fato: usa o atual
+            (expires > now && !force_refresh).then(|| o["accessToken"].as_str().map(str::to_owned)).flatten()
+        }
+    }
+}
+
+/// Troca o refresh token por um novo par, como o próprio Claude Code faz, e grava no arquivo.
+async fn refresh(path: &Path, creds: &Value) -> Option<String> {
+    let o = &creds["claudeAiOauth"];
+    let old_refresh = o["refreshToken"].as_str()?.to_owned();
+    if o["refreshTokenExpiresAt"].as_i64().is_some_and(|e| e <= now_ms() as i64) {
+        return None; // precisa de /login no Claude Code
+    }
+    let scopes: Vec<&str> = o["scopes"].as_array().map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let mut body = serde_json::json!({
+        "grant_type": "refresh_token",
+        "refresh_token": old_refresh,
+        "client_id": CLIENT_ID,
+    });
+    if !scopes.is_empty() {
+        body["scope"] = Value::from(scopes.join(" "));
+    }
+    let resp = reqwest::Client::new()
+        .post(TOKEN_URL)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(20))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        // outro processo pode ter renovado antes (refresh token já trocado): usa o do arquivo
+        let now_creds = read_credentials(path)?;
+        let n = &now_creds["claudeAiOauth"];
+        if n["refreshToken"].as_str() != Some(old_refresh.as_str())
+            && n["expiresAt"].as_i64().is_some_and(|e| e > now_ms() as i64)
+        {
+            return n["accessToken"].as_str().map(str::to_owned);
+        }
+        return None;
+    }
+    let r: Value = resp.json().await.ok()?;
+    let access = r["access_token"].as_str()?.to_owned();
+    let expires_in = r["expires_in"].as_i64()?;
+    let now = now_ms() as i64;
+
+    // relê logo antes de gravar para preservar o que mudou nesse meio-tempo
+    let mut fresh = read_credentials(path)?;
+    if fresh["claudeAiOauth"]["refreshToken"].as_str() != Some(old_refresh.as_str()) {
+        return Some(access); // alguém já gravou outro par; não sobrescreve
+    }
+    let f = fresh["claudeAiOauth"].as_object_mut()?;
+    f.insert("accessToken".into(), Value::from(access.clone()));
+    f.insert("expiresAt".into(), Value::from(now + expires_in * 1000));
+    if let Some(rt) = r["refresh_token"].as_str() {
+        f.insert("refreshToken".into(), Value::from(rt));
+    }
+    if let Some(e) = r["refresh_token_expires_in"].as_i64() {
+        f.insert("refreshTokenExpiresAt".into(), Value::from(now + e * 1000));
+    }
+    if let Some(s) = r["scope"].as_str() {
+        let list: Vec<Value> = s.split_whitespace().map(Value::from).collect();
+        if !list.is_empty() {
+            f.insert("scopes".into(), Value::from(list));
+        }
+    }
+    write_atomic(path, &serde_json::to_string(&fresh).ok()?)?;
+    Some(access)
+}
+
+/// Grava num temporário ao lado e troca de nome, para nunca deixar o arquivo pela metade.
+fn write_atomic(path: &Path, text: &str) -> Option<()> {
+    let tmp = path.with_extension(format!("json.widget-{}.tmp", std::process::id()));
+    fs::write(&tmp, text).ok()?;
+    if fs::rename(&tmp, path).is_err() {
+        let _ = fs::remove_file(&tmp);
+        return None;
+    }
+    Some(())
+}
+
+async fn get_usage(token: &str) -> Result<Value, Option<reqwest::StatusCode>> {
+    let resp = reqwest::Client::new()
+        .get("https://api.anthropic.com/api/oauth/usage")
+        .bearer_auth(token)
+        .header("anthropic-beta", "oauth-2025-04-20")
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|_| None)?;
+    if !resp.status().is_success() {
+        return Err(Some(resp.status()));
+    }
+    resp.json().await.map_err(|_| None)
 }
 
 /// Mesmo endpoint do `/usage` do Claude Code (não documentado: falhas caem na status line).
@@ -288,20 +413,12 @@ async fn api_usage() -> Option<Value> {
             return Some(v.clone());
         }
     }
-    let token = access_token()?;
-    let v: Value = reqwest::Client::new()
-        .get("https://api.anthropic.com/api/oauth/usage")
-        .bearer_auth(token)
-        .header("anthropic-beta", "oauth-2025-04-20")
-        .timeout(std::time::Duration::from_secs(15))
-        .send()
-        .await
-        .ok()?
-        .error_for_status()
-        .ok()?
-        .json()
-        .await
-        .ok()?;
+    let token = access_token(false).await?;
+    let v = match get_usage(&token).await {
+        Ok(v) => v,
+        Err(Some(reqwest::StatusCode::UNAUTHORIZED)) => get_usage(&access_token(true).await?).await.ok()?,
+        Err(_) => return None,
+    };
     *API.lock().unwrap() = Some((std::time::Instant::now(), v.clone()));
     Some(v)
 }

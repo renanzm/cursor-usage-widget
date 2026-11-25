@@ -49,7 +49,7 @@ No modo **Automático**, ele usa a primeira fonte encontrada nesta ordem: Claude
 > [!NOTE]
 > Para Claude Code e Codex, o valor em US$ é o **equivalente de API**, ou seja, quanto custaria pagar por token. Não é a sua fatura: em planos por assinatura, o que importa são as barras de limite. Os preços podem ser ajustados por variáveis de ambiente (veja abaixo).
 
-**Privacidade:** tudo roda na sua máquina. O token do Claude Code só é enviado para `api.anthropic.com`, e o cookie do Cursor só vai para `cursor.com`. Ele fica guardado no Gerenciador de Credenciais do Windows.
+**Privacidade:** tudo roda na sua máquina. O login do Claude Code só é enviado para a Anthropic (`api.anthropic.com` e, para renovar o token quando ele expira, `platform.claude.com`). O token renovado é gravado de volta em `~/.claude/.credentials.json`, como o próprio Claude Code faz. O cookie do Cursor só vai para `cursor.com`. Ele fica guardado no Gerenciador de Credenciais do Windows.
 
 ## Instalação
 
