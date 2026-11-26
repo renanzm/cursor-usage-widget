@@ -40,7 +40,7 @@ Funciona com **Claude Code**, **Codex** (OpenAI) e **Cursor**. Você escolhe a f
 
 | Fonte | De onde vem o custo | De onde vêm os limites |
 |---|---|---|
-| **Claude Code** | Logs locais em `~/.claude/projects` (estimativa: tokens × preço do modelo) | API de uso da Anthropic, com o login do próprio Claude Code. Se ela não responder, usa a status line opcional, que só funciona no Claude Code de terminal. |
+| **Claude Code** | Logs locais em `~/.claude/projects` (estimativa: tokens × preço do modelo) | API de uso da Anthropic, com o login do próprio Claude Code. Se ela não responder, mostra a última leitura salva (da API ou da status line opcional). |
 | **Codex** | Logs locais em `~/.codex/sessions` (estimativa: tokens × preço do modelo) | Os próprios logs do Codex (`rate_limits`) |
 | **Cursor** | Dashboard do cursor.com (valores reais da sua conta) | — |
 

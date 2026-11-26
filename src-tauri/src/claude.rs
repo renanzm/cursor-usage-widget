@@ -252,10 +252,15 @@ pub fn to_ms(v: &Value) -> Option<i64> {
     DateTime::parse_from_rfc3339(v.as_str()?).ok().map(|t| t.timestamp_millis())
 }
 
-/// Lê `~/.claude/widget-limits.json`, gravado pela status line (tools/claude-statusline.ps1).
+fn limits_path() -> Option<PathBuf> {
+    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).ok()?;
+    Some(PathBuf::from(home).join(".claude").join("widget-limits.json"))
+}
+
+/// Última leitura conhecida: `~/.claude/widget-limits.json`, gravada pela API de uso
+/// ou pela status line (tools/claude-statusline.ps1).
 fn apply_limits(snap: &mut Snapshot) {
-    let home = std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).unwrap_or_default();
-    let path = PathBuf::from(home).join(".claude").join("widget-limits.json");
+    let Some(path) = limits_path() else { return };
     let Ok(text) = fs::read_to_string(path) else { return };
     let Ok(v) = serde_json::from_str::<Value>(text.trim_start_matches('\u{feff}')) else { return };
     let rl = &v["rate_limits"];
@@ -266,8 +271,10 @@ fn apply_limits(snap: &mut Snapshot) {
     snap.limit_7d_resets_ms = to_ms(&rl["seven_day"]["resets_at"]);
 }
 
-/// Última resposta do endpoint de uso (instante, JSON): consulta no máximo 1x por minuto.
-static API: Mutex<Option<(std::time::Instant, Value)>> = Mutex::new(None);
+/// Última tentativa no endpoint de uso. Ele recusa chamadas frequentes (429),
+/// então vale no máximo uma a cada 3 minutos, com ou sem sucesso.
+static API_TRY: Mutex<Option<std::time::Instant>> = Mutex::new(None);
+const API_INTERVAL: std::time::Duration = std::time::Duration::from_secs(180);
 
 /// Login do Claude Code: `~/.claude/.credentials.json` (ou `$CLAUDE_CONFIG_DIR`).
 fn credentials_path() -> Option<PathBuf> {
@@ -408,19 +415,19 @@ async fn get_usage(token: &str) -> Result<Value, Option<reqwest::StatusCode>> {
 
 /// Mesmo endpoint do `/usage` do Claude Code (não documentado: falhas caem na status line).
 async fn api_usage() -> Option<Value> {
-    if let Some((t, v)) = API.lock().unwrap().as_ref() {
-        if t.elapsed() < std::time::Duration::from_secs(60) {
-            return Some(v.clone());
+    {
+        let mut last = API_TRY.lock().unwrap();
+        if last.is_some_and(|t| t.elapsed() < API_INTERVAL) {
+            return None; // vale a leitura salva em disco
         }
+        *last = Some(std::time::Instant::now());
     }
     let token = access_token(false).await?;
-    let v = match get_usage(&token).await {
-        Ok(v) => v,
-        Err(Some(reqwest::StatusCode::UNAUTHORIZED)) => get_usage(&access_token(true).await?).await.ok()?,
-        Err(_) => return None,
-    };
-    *API.lock().unwrap() = Some((std::time::Instant::now(), v.clone()));
-    Some(v)
+    match get_usage(&token).await {
+        Ok(v) => Some(v),
+        Err(Some(reqwest::StatusCode::UNAUTHORIZED)) => get_usage(&access_token(true).await?).await.ok(),
+        Err(_) => None,
+    }
 }
 
 fn apply_api(snap: &mut Snapshot, v: &Value) {
@@ -433,6 +440,22 @@ fn apply_api(snap: &mut Snapshot, v: &Value) {
     snap.limit_5h_resets_ms = to_ms(&v["five_hour"]["resets_at"]);
     snap.limit_7d_pct = pct("seven_day");
     snap.limit_7d_resets_ms = to_ms(&v["seven_day"]["resets_at"]);
+    save_limits(snap);
+}
+
+/// Guarda a leitura no formato da status line, para sobreviver a recusas e reinícios.
+fn save_limits(snap: &Snapshot) {
+    let window = |pct: Option<f64>, resets: Option<i64>| serde_json::json!({ "used_percentage": pct, "resets_at": resets });
+    let v = serde_json::json!({
+        "updated_at_ms": snap.limits_updated_ms,
+        "rate_limits": {
+            "five_hour": window(snap.limit_5h_pct, snap.limit_5h_resets_ms),
+            "seven_day": window(snap.limit_7d_pct, snap.limit_7d_resets_ms),
+        },
+    });
+    if let Some(path) = limits_path() {
+        let _ = write_atomic(&path, &v.to_string());
+    }
 }
 
 pub async fn fetch(settings: &Settings) -> Result<Snapshot, String> {
